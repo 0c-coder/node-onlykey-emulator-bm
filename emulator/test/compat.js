@@ -50,9 +50,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const build = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.stage', 'build.json'), 'utf8'));
 /*
  * The working tree is the NEWEST tree, so its row is the newest release in the
- * library's table - list()[0]. This was hard-wired to 'v3.0.5', and the day the
- * checkouts moved to 3.1.0 (2026-09-28: bm-ok masters = release-3.1.0 + the
- * CTAPHID wipe fix) a key reporting v3.1.0 failed against the 3.0.5 row. Taking
+ * library's table - list()[0]. This was hard-wired to the interim pre-release
+ * row, and the day the checkouts moved to 3.1.0 (2026-09-28: bm-ok masters =
+ * release-3.1.0 + the CTAPHID wipe fix) a key reporting v3.1.0 failed against it. Taking
  * it from the table follows each release without an edit here.
  */
 const rowName = build.version === versions.WORKING_TREE ? libVersions.list()[0] : build.version;

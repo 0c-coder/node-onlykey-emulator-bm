@@ -6,7 +6,7 @@
  *   node scripts/matrix.js v3.0.4 v2.1.0    just these
  *
  * Ported in spirit from ok-rn's tools/matrix.js; the checks are this repo's own,
- * because the test kit targets the 3.0.5 compatibility tree and does not fit
+ * because the test kit targets the 3.1.0 compatibility tree and does not fit
  * older releases. Per release:
  *
  *   stage     OKEMU_VERSION=<release>: pinned commits, its patches, DEBUG off
