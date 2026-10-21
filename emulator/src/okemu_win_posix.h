@@ -215,11 +215,41 @@ static inline int clock_gettime(int clk, struct timespec *ts) {
   return 0;
 }
 
+/*
+ * NOT Sleep() - the same lesson as okemu_idle_us() in core-override/okemu_pins.cpp.
+ * Sleep() rounds up to the scheduler tick, 15.6 ms by default, so this shim made
+ * the firmware's delay(1) (okemu_delay_ms) and the SysTick thread's 500 us wait
+ * last ~16 ms each. The firmware loop ran about six times slower than on Linux:
+ * on a blank store it took its first HID report after 9.4 s (Linux 1.5 s, the
+ * same ~310 sense rounds), and test/compat.js - which waits 4.5 s - saw no reply
+ * on every release (2026-10-21).
+ *
+ * A high-resolution waitable timer (Windows 10 1803+) honours its due time in
+ * 100 ns units. ONE PER THREAD: the firmware thread and the SysTick thread both
+ * sleep here. If the timer cannot be made, Sleep() as before.
+ */
 static inline int nanosleep(const struct timespec *req,
                             struct timespec *rem) {
+  static __declspec(thread) HANDLE timer = NULL;
+  static __declspec(thread) int tried = 0;
+  LONGLONG ns100 = (LONGLONG)req->tv_sec * 10000000LL + req->tv_nsec / 100;
   (void)rem;
-  /* Sleep() is millisecond-granular; never 0, which does not yield to a
-   * lower-priority thread. Callers here are throttles, not timing sources. */
+  if (!tried) {
+    tried = 1;
+    timer = CreateWaitableTimerExW(
+        NULL, NULL,
+        CREATE_WAITABLE_TIMER_MANUAL_RESET | CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+        TIMER_ALL_ACCESS);
+  }
+  if (timer && ns100 > 0) {
+    LARGE_INTEGER due;
+    due.QuadPart = -ns100;   /* negative = relative */
+    if (SetWaitableTimer(timer, &due, 0, NULL, NULL, FALSE)) {
+      WaitForSingleObject(timer, INFINITE);
+      return 0;
+    }
+  }
+  /* never 0, which does not yield to a lower-priority thread */
   DWORD ms = (DWORD)(req->tv_sec * 1000LL + req->tv_nsec / 1000000L);
   Sleep(ms ? ms : 1);
   return 0;

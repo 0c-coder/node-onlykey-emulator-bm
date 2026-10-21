@@ -27,7 +27,8 @@ function vendor(cmd) {
   emu.start({ storageDir });
   /*
    * A blank store's first boot keeps the firmware busy for seconds (measured: the first vendor
-   * report taken ~9 s after start on Windows) - and the first write proves the point: it resolves
+   * report taken ~2.6 s after start on Windows, ~1.5 s on Linux; 9.4 s on Windows before the
+   * nanosleep fix in src/okemu_win_posix.h) - and the first write proves the point: it resolves
    * the moment the firmware takes it, together with the reply, not when it was queued.
    */
   const first = await emu.writeHidTaken(vendor(0xE1), emu.IFACE.VENDOR, 20000);
