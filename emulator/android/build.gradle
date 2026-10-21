@@ -153,6 +153,22 @@ def okemuStage = {
         env.put("OKEMU_TARGET", "android")
         def checkouts = project.findProperty("okemuCheckouts")
         if (checkouts) env.put("OKEMU_CHECKOUTS", file(checkouts.toString()).absolutePath)
+        /*
+         * A host app names its soft key in gradle.properties, so a plain `gradlew assemble…`
+         * always stages the same firmware - an environment variable is forgotten on the next
+         * build. Each property is the stage.js variable of the same meaning; one already in the
+         * environment is left alone.
+         *   okemuPlugins  OKEMU_PLUGINS  e.g. config,edge,key_chain,fix_usertimeout
+         *   okemuAppOut   OKEMU_APP_OUT  the app's folder for firmware.json + the plugins' tests
+         *   okemuVersion  OKEMU_VERSION  a release recipe (scripts/versions/) instead of the tree
+         *   okemuDebug    OKEMU_DEBUG    1 = the DEBUG console (off by default)
+         */
+        [okemuPlugins: "OKEMU_PLUGINS", okemuAppOut: "OKEMU_APP_OUT", okemuVersion: "OKEMU_VERSION", okemuDebug: "OKEMU_DEBUG"].each { prop, name ->
+            def v = project.findProperty(prop)
+            if (v != null && !env.containsKey(name)) {
+                env.put(name, prop == "okemuAppOut" ? file(v.toString()).absolutePath : v.toString())
+            }
+        }
         def proc
         try {
             proc = pb.start()

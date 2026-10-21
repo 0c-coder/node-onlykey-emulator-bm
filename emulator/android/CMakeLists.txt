@@ -35,6 +35,19 @@ if(NOT EXISTS ${OKEMU_DIR}/sources.cmake)
 endif()
 include(${OKEMU_DIR}/sources.cmake)
 
+# Windows hosts: the staged sources sit outside this folder, so CMake names each
+# object after the source's absolute path (CMakeFiles/okemu_firmware.dir/C_/Users/
+# .../emulator/.stage/libraries/Crypto/...). Under a host app's .cxx folder that
+# passes the 248 characters Windows allows a directory, and ninja fails at mkdir.
+# CMake's default limit (250) is for the whole object file path, so the folder
+# above it can still pass 248. At 240 CMake hashes the part after its own build
+# folder until the whole path fits; it cannot go much lower, because only that
+# part can be shortened. Other hosts have no such limit and keep the readable
+# names.
+if(CMAKE_HOST_WIN32)
+  set(CMAKE_OBJECT_PATH_MAX 240)
+endif()
+
 # ----------------------------------------------------------------- the library
 
 # Two targets, as in binding.gyp - and for a reason beyond the C++ standard.
