@@ -1,0 +1,108 @@
+'use strict';
+/*
+ * key_chain - the soft key tells the app about every derived PUBLIC key it
+ * answers (spec session + Brad, 2026-10-03), so ok-rn can keep it in the
+ * phone's Key Chain list. Only the firmware sees every transport in the clear:
+ * the FIDO derive (the web page path) is transit-encrypted before the app could
+ * read it. So the record is made here and handed to the app as an event.
+ *
+ * What a record carries (src/okplugin_key_chain.cpp): the transport
+ * (outputmode: the vendor interface or WebAuthn), the derivation code (132 v1,
+ * 232 v2, 128 the web/X-Wing key), the keytype, the 32-byte label hash the
+ * request named, the rpId hash on the FIDO path, and the public key. NEVER a
+ * private key, a seed or a shared secret.
+ *
+ * A derive is not a use: no Edge link, no receipt, no budget is touched. A
+ * firmware derive LINK (for hard keys too) is a later spec proposal.
+ *
+ * Hooks (each anchor occurs exactly once in the 3.1.0 tree):
+ *   1 okcrypto.cpp       include the plugin header
+ *   2 okcrypto.cpp       OKGETPUBKEY agent derivation v1 (code 132)
+ *   3 okcrypto.cpp       OKGETPUBKEY agent derivation v2 (code 232)
+ *   4 okcrypto.cpp       OKGETPUBKEY derived X-Wing recipient (code 128)
+ *   5 ok_extension.cpp   include the plugin header
+ *   6 ok_extension.cpp   the FIDO derive (web page path): ed25519/x25519, P-256, secp256k1
+ *   7 ok_extension.cpp   the FIDO derived X-Wing recipient
+ *   8 okcore.cpp         include the plugin header
+ *   9 okcore.cpp         okcore_prime_user_confirmation(): the press record - what waits for a press,
+ *                        for the app to present beside its press button
+ *  10 ok_extension.cpp   web_agent_derive_gate(): a slot-128 shared-secret derive starts waiting for
+ *                        its confirmation (field 30: a press or the 3-digit code) - the same press
+ *                        record, marked as a derive, with the mode
+ *  11 ok_extension.cpp   web_agent_derive_gate(): that wait ended (pressed, wrong code, timed out)
+ *
+ * The app side: okemu_plugin_event() (jni/okemu_jni.cpp) -> NativeOkEmu
+ * onPluginEvent -> src/keyChainRecorder.ts (derive records) and src/pressAsk.ts ->
+ * src/ui/PressSheet.tsx (the press record).
+ */
+const INC = '#include "plugins/key_chain/okplugin_key_chain.h"\n';
+module.exports = {
+  name: 'key_chain',
+  minBase: '3.1.0',
+  notes: 'reports each derived public key the soft key answers (transport, code, keytype, label hash, rpId hash, public key) to the app for its Key Chain list; never private data; not a use',
+  backup: false,
+  /* keeps nothing in flash or EEPROM: the soft key's storage slot is not named after it (firmware-plugins slotPlugins) */
+  stateless: true,
+  hooks: [
+    { file: 'okcrypto.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
+    /* okcore.cpp: the header, and okcore_prime_user_confirmation() - a sign or decrypt now waits for its press */
+    { file: 'okcore.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
+    {
+      file: 'okcore.cpp',
+      anchor: '    user_input_mode = okcore_user_input_mode_for_slot(slot);\n',
+      insert: 'after',
+      text: '    okplugin_key_chain_primed(outputmode, opcode, slot, msg, msg_len);\n',
+    },
+    /* ok_extension.cpp: the derive gate's wait, its start and its end */
+    {
+      /* a slot-128 decapsulation's press is given only SHA-256(label || ct): hand over the label first */
+      file: 'okcrypto.cpp',
+      anchor: '            okcore_prime_user_confirmation(OKDECRYPT, RESERVED_KEY_WEB_AGENT_DERIVATION,\n',
+      insert: 'before',
+      text: '            okplugin_key_chain_decaps_label(derive_label);\n',
+    },
+    {
+      file: 'libraries/fido2/ok_extension.cpp',
+      anchor: '    device_set_status(CTAPHID_STATUS_UPNEEDED);\n',
+      insert: 'after',
+      text: '    okplugin_key_chain_derive_wait(outputmode, need, data, len);\n',
+    },
+    {
+      file: 'libraries/fido2/ok_extension.cpp',
+      anchor: '    if (but == -2) {\n',
+      insert: 'before',
+      text: '    okplugin_key_chain_derive_done(but);\n',
+    },
+    {
+      file: 'okcrypto.cpp',
+      anchor: '        okcrypto_derive_key(buffer[6], buffer + 7, 0);\n',
+      insert: 'after',
+      text: '        okplugin_key_chain_derived(outputmode, RESERVED_KEY_DERIVATION, buffer[6], buffer + 7, ecc_public_key, 0, NULL);\n',
+    },
+    {
+      file: 'okcrypto.cpp',
+      anchor: '        okcrypto_derive_key(buffer[6], buffer + 7, RESERVED_KEY_DERIVATION);\n',
+      insert: 'after',
+      text: '        okplugin_key_chain_derived(outputmode, DERIVATION_V2_PUBKEY_CODE, buffer[6], buffer + 7, ecc_public_key, 0, NULL);\n',
+    },
+    {
+      file: 'okcrypto.cpp',
+      anchor: '        okcrypto_xwing_derive_getpubkey(buffer + 7, large_resp_buffer);\n',
+      insert: 'after',
+      text: '        okplugin_key_chain_derived(outputmode, RESERVED_KEY_WEB_AGENT_DERIVATION, KEYTYPE_XWING, buffer + 7, large_resp_buffer, XWING_PK_SIZE, NULL);\n',
+    },
+    { file: 'libraries/fido2/ok_extension.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
+    {
+      file: 'libraries/fido2/ok_extension.cpp',
+      anchor: '                memcpy(temp + 32 + sizeof(UNLOCKED) + 1, ecc_public_key, pubsize); // Copy derived public key to temp\n',
+      insert: 'after',
+      text: '                okplugin_key_chain_derived(outputmode, RESERVED_KEY_WEB_AGENT_DERIVATION, opt2, additional_data + 1, ecc_public_key, pubsize, _appid); /* [0] is a prefix byte; the label hash follows */\n',
+    },
+    {
+      file: 'libraries/fido2/ok_extension.cpp',
+      anchor: '                    okcrypto_xwing_derive_getpubkey(label32, large_resp_buffer + hdr);\n',
+      insert: 'after',
+      text: '                    okplugin_key_chain_derived(outputmode, RESERVED_KEY_WEB_AGENT_DERIVATION, KEYTYPE_XWING, label32, large_resp_buffer + hdr, XWING_PK_SIZE, _appid);\n',
+    },
+  ],
+};

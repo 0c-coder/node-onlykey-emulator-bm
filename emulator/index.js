@@ -102,6 +102,9 @@ class OnlyKeyEmulator extends EventEmitter {
       },
 
       onRestart: () => this.emit('restart'),
+
+      /* a firmware plugin's event (plugins/key_chain): 'plugin' (name, buffer) */
+      onPluginEvent: (name, data) => this.emit('plugin', name, data),
     });
 
     this.started = true;

@@ -20,6 +20,7 @@
 #include <windows.h>
 #include <process.h>   /* _beginthreadex: std::thread cannot set a stack size */
 #endif
+#include <string>
 #include <vector>
 
 #include "ok_hal.h"
@@ -34,6 +35,7 @@ struct Emu {
   Napi::ThreadSafeFunction led;
   Napi::ThreadSafeFunction stream;
   Napi::ThreadSafeFunction restart;
+  Napi::ThreadSafeFunction plugin;
 };
 
 Emu g;
@@ -78,6 +80,27 @@ void on_restart(void * /*ctx*/) {
   });
 }
 
+}  // namespace
+
+/*
+ * A firmware plugin's event (plugins/key_chain: a derived public key the soft
+ * key answered, a press record). The plugin declares okemu_plugin_event weak
+ * and calls it only when a host provides it; Android's JNI does
+ * (android/jni/okemu_jni.cpp), and so does this addon: onPluginEvent(name,
+ * buffer), the module's 'plugin' event. Called on the firmware thread, so it
+ * goes through a thread-safe function and never waits for JS.
+ */
+extern "C" void okemu_plugin_event(const char *name, const uint8_t *data, int len) {
+  if (!g.plugin || !name || !data || len <= 0) return;
+  std::string n(name);
+  std::vector<uint8_t> buf(data, data + len);
+  g.plugin.NonBlockingCall([n, buf](Napi::Env env, Napi::Function cb) {
+    cb.Call({Napi::String::New(env, n), Napi::Buffer<uint8_t>::Copy(env, buf.data(), buf.size())});
+  });
+}
+
+namespace {
+
 /* ---------------------------------------------------------- bindings */
 
 Napi::Value Start(const Napi::CallbackInfo &info) {
@@ -107,6 +130,7 @@ Napi::Value Start(const Napi::CallbackInfo &info) {
     {"onLed",     &g.led},
     {"onStream",  &g.stream},
     {"onRestart", &g.restart},
+    {"onPluginEvent", &g.plugin},
   };
   for (auto &c : cbs) {
     if (opt.Has(c.name) && opt.Get(c.name).IsFunction()) {
@@ -362,7 +386,7 @@ Napi::Value FactoryReset(const Napi::CallbackInfo &info) {
 Napi::Value Stop(const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();
   okemu_hal_shutdown();
-  for (auto *t : {&g.led, &g.stream, &g.restart}) {
+  for (auto *t : {&g.led, &g.stream, &g.restart, &g.plugin}) {
     if (*t) { t->Release(); }
   }
   /*
