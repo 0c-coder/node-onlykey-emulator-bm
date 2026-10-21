@@ -28,6 +28,24 @@
 #include <execinfo.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#if defined(__ANDROID__) && (!defined(__ANDROID_API__) || __ANDROID_API__ < 33)
+/*
+ * bionic ships <execinfo.h> but only declares backtrace() from API 33 (Android
+ * 13). This library targets older devices, so the two call sites below - both
+ * purely diagnostic - degrade to a one-line note instead.
+ *
+ * Nothing about restart handling depends on the trace: it exists to tell an
+ * expected CPU_RESTART() apart from a spurious one when OKEMU_TRACE_RESTART is
+ * set, and to annotate a genuine crash before the default handler runs.
+ */
+static inline int okemu_backtrace(void **, int) { return 0; }
+static inline void okemu_backtrace_fd(void *const *, int, int fd) {
+  static const char unavailable[] = "[okemu] backtrace unavailable below API 33\n";
+  (void)!write(fd, unavailable, sizeof unavailable - 1);
+}
+#define backtrace            okemu_backtrace
+#define backtrace_symbols_fd okemu_backtrace_fd
+#endif /* __ANDROID__ below API 33 */
 #endif
 #include <stdlib.h>
 #include <time.h>

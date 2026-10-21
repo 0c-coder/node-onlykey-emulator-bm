@@ -1,0 +1,3 @@
+# generated file list for the Android library (scripts/gen-sources.js), the
+# CMake twin of sources.gypi, which the repo root's .gitignore covers
+/sources.cmake

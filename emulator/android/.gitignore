@@ -1,0 +1,5 @@
+# Gradle and CMake output of the :okemu module.
+/build/
+/.cxx/
+/.gradle/
+/local.properties

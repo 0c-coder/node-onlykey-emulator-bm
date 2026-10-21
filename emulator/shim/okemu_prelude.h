@@ -84,11 +84,12 @@ static inline int okemu_vdprintf(int /*fd - see above*/, const char *fmt,
  * exactly unsigned int where it exists, so the typedef is not a guess.
  */
 typedef unsigned int uint;
+#endif /* _WIN32 */
 
 /*
- * Where the emulated flash array lives, on Windows.
+ * Where the emulated flash array lives, on Windows and Android.
  *
- * OKEMU_FLASH_BASE is the NAME OF THIS VARIABLE, not an address - Windows
+ * OKEMU_FLASH_BASE is the NAME OF THIS VARIABLE, not an address - the kernel
  * chooses where the 256 KB lands and okemu_hal_init() records it. stage.js
  * rewrites okcore.h's four address literals as OKEMU_FLASH_BASE + offset, and
  * okcore.h includes nothing of ours, so the declaration has to arrive through
@@ -96,8 +97,12 @@ typedef unsigned int uint;
  *
  * ok_hal.h spells the same macro identically, which the standard permits: a
  * macro may be redefined with the same token sequence. Both are kept, so
- * neither file depends on the other having been included first.
+ * neither file depends on the other having been included first. The Android
+ * CMakeLists passes the same definition with -D, hence the #ifndef.
+ *
+ * Node on Linux maps the array at its real address (0) and needs neither.
  */
+#if defined(_WIN32) || defined(__ANDROID__)
 #include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
@@ -106,7 +111,12 @@ extern uintptr_t okemu_flash_base;
 #ifdef __cplusplus
 }
 #endif
+#ifndef OKEMU_FLASH_BASE
 #define OKEMU_FLASH_BASE okemu_flash_base
+#endif
+#endif /* _WIN32 || __ANDROID__ */
+
+#ifdef _WIN32
 
 /*
  * `ssize_t` - POSIX, and the UCRT has no such name.

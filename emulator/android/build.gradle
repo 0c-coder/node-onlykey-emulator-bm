@@ -1,0 +1,181 @@
+/*
+ * :okemu - the OnlyKey soft key as an Android library (libokemu.so).
+ *
+ * The same firmware host the Node addon is, built from the same emulator/
+ * tree: one soft key, fixed in one place. Ported from
+ * ok-rn/android/okemu/build.gradle; the sources now come from emulator/ (src,
+ * core-override, shim, .stage, sources.cmake) instead of a copy.
+ *
+ * A separate Gradle module rather than part of a host's :app because the
+ * React Native gradle plugin already owns :app's externalNativeBuild (it
+ * generates the CMakeLists that produces libappmodules.so for the New
+ * Architecture), and a module can only have one.
+ *
+ * Two ways to build it:
+ *   - inside a host app: include it from the host's settings.gradle, e.g.
+ *       include ':okemu'
+ *       project(':okemu').projectDir = new File(<emulator>/android)
+ *     The host's root project supplies compileSdkVersion, ndkVersion,
+ *     buildToolsVersion and minSdkVersion through rootProject.ext, as React
+ *     Native and Expo root projects do.
+ *   - alone: settings.gradle beside this file pins the plugin versions, and the
+ *     defaults below stand in for rootProject.ext (ok-edge's: Expo SDK 58 /
+ *     React Native 0.88).
+ *
+ * Produces libokemu.so, which the host packages and loads via
+ * com.okrn.okemu.OkEmuNative.
+ */
+plugins {
+    id "com.android.library"
+    // gradle.properties sets android.builtInKotlin=false (as ok-edge and ok-rn
+    // do), so the Kotlin plugin has to be applied explicitly or OkEmuNative.kt
+    // is silently not compiled.
+    id "org.jetbrains.kotlin.android"
+}
+
+/* A root-project value when a host provides one, else the standalone default. */
+def okemuExt = { String name, fallback ->
+    rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+android {
+    namespace "com.okrn.okemu"
+    compileSdk okemuExt("compileSdkVersion", 37)
+    ndkVersion okemuExt("ndkVersion", "27.1.12297006")
+    buildToolsVersion okemuExt("buildToolsVersion", "37.0.0")
+
+    defaultConfig {
+        minSdkVersion okemuExt("minSdkVersion", 24)
+
+        externalNativeBuild {
+            cmake {
+                /*
+                 * The firmware is C++ written against gnu++11 and C against
+                 * gnu11; CMakeLists sets both per-language. Nothing is passed
+                 * here so there is one place to look.
+                 */
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+
+        /*
+         * armeabi-v7a is not an oversight.
+         *
+         * The Galaxy A13 (SM-S136DL) and other Samsung handsets ship a
+         * 32-bit-only Android build - `getprop ro.product.cpu.abilist64` comes
+         * back empty - so an arm64-only APK fails to install on them with
+         * INSTALL_FAILED_NO_MATCHING_ABIS. Both are built.
+         *
+         * x86_64 is included so the firmware can be exercised on an emulator,
+         * where USB OTG is unavailable anyway.
+         *
+         * -PokemuAbis=arm64-v8a (comma-separated) narrows it, for a quick build.
+         */
+        ndk {
+            def abis = project.findProperty("okemuAbis")
+            if (abis) {
+                abiFilters(*abis.toString().split(",").collect { it.trim() }.findAll { it })
+            } else {
+                abiFilters "armeabi-v7a", "arm64-v8a", "x86_64"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    /*
+     * Java 17, matching the Kotlin target. A React Native host sets this for
+     * every module already; built alone, AGP's Java default (11) and Kotlin's
+     * (the JDK's, 17) disagree and :compileReleaseKotlin refuses to run.
+     */
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        // Keep the debug symbols out of the APK; they are ~10x the code size.
+        jniLibs {
+            keepDebugSymbols += []
+        }
+    }
+}
+
+/*
+ * Stage the firmware sources before CMake is configured.
+ *
+ * emulator/scripts/stage.js copies OnlyKey-Firmware, libraries/ and the Teensy
+ * core out of the checkouts and patches the copies into emulator/.stage;
+ * gen-sources.js then lists what to compile (emulator/sources.cmake, beside the
+ * node build's sources.gypi). CMakeLists refuses to configure without
+ * sources.cmake, so this has to happen at Gradle *configuration* time, not
+ * execution time - externalNativeBuild resolves its CMake project while the
+ * build is being configured.
+ *
+ * OKEMU_TARGET is forced to android: the stage applies only the patches meant
+ * for this target and records it, and a change of target (from a node build
+ * of the same tree) drops the compiled objects - cleanOnSwap() in stage.js.
+ *
+ * Everything else comes from the environment, which the child inherits:
+ * OKEMU_PLUGINS / OKEMU_PLUGINS_DIR, OKEMU_DEBUG / OKEMU_PRODUCTION,
+ * OKEMU_VERSION, OKEMU_APP_OUT, and OKEMU_CHECKOUTS - the folder holding
+ * OnlyKey-Firmware, libraries and arduino-1.6.5-r5-teensy_127 when this repo
+ * is not beside them (installed under another project's node_modules).
+ * -PokemuCheckouts=<dir> sets OKEMU_CHECKOUTS from Gradle instead.
+ *
+ * Cheap enough to run unconditionally (a few hundred file copies), and running
+ * it every time is what keeps a stale .stage from silently outliving an edit
+ * to the firmware checkout.
+ */
+def okemuStage = {
+    def emulatorDir = projectDir.parentFile
+    /*
+     * Plain "node": CreateProcess already searches PATH and appends .exe on
+     * Windows, so naming node.cmd finds nothing (that shim only exists for
+     * npm-installed packages, not for node itself).
+     */
+    ["scripts/stage.js", "scripts/gen-sources.js"].each { script ->
+        def pb = new ProcessBuilder(["node", script])
+                .directory(emulatorDir)
+                .redirectErrorStream(true)
+        def env = pb.environment()
+        env.put("OKEMU_TARGET", "android")
+        def checkouts = project.findProperty("okemuCheckouts")
+        if (checkouts) env.put("OKEMU_CHECKOUTS", file(checkouts.toString()).absolutePath)
+        def proc
+        try {
+            proc = pb.start()
+        } catch (IOException e) {
+            throw new GradleException(
+                "okemu: node is not on PATH. The firmware sources are staged by " +
+                "a Node script before CMake runs; install Node 22+ or run " +
+                "`OKEMU_TARGET=android node scripts/stage.js && node scripts/gen-sources.js` " +
+                "in ${emulatorDir} by hand.", e)
+        }
+        def output = proc.inputStream.text
+        if (proc.waitFor() != 0) {
+            throw new GradleException("okemu: ${script} failed\n${output}")
+        }
+        output.readLines().findAll { !it.trim().isEmpty() }.each {
+            logger.lifecycle("okemu: ${it}")
+        }
+    }
+}
+okemuStage()
+
+// Explicit re-stage, for when a checkout changes under a warm build dir.
+tasks.register("stageOkEmu") {
+    description = "Re-copy and re-patch the firmware sources from the checkouts."
+    doLast { okemuStage() }
+}

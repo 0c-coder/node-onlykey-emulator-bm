@@ -47,14 +47,21 @@ extern "C" {
  * OKEMU_FLASH_BASE + offset by scripts/stage.js, so every offset and every
  * difference between them is unchanged and only the origin moves.
  *
- * ok-rn/android/okemu reached the same answer for Android, where the fixed
- * address collided with ART's JIT zygote cache.
+ * Android does the same, for two reasons: vm.mmap_min_addr is 0x8000 there and
+ * an app cannot lower it, and any fixed address is a bet against ART - the
+ * 0x44000000 once used is ART's JIT zygote cache on a Pixel 6a. The Android
+ * CMakeLists also passes -DOKEMU_FLASH_BASE=okemu_flash_base, so the #ifndef
+ * lets a build system name the base and this header agrees with it.
  */
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
 extern uintptr_t okemu_flash_base;
+#endif
+#ifndef OKEMU_FLASH_BASE
+#if defined(_WIN32) || defined(__ANDROID__)
 #define OKEMU_FLASH_BASE   okemu_flash_base
 #else
 #define OKEMU_FLASH_BASE   0x00000000UL
+#endif
 #endif
 #define OKEMU_FLASH_SIZE   0x00040000UL   /* 256 KB - MK20DX256 */
 

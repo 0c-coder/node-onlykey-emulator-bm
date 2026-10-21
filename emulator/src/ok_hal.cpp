@@ -27,11 +27,13 @@
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__ANDROID__)
 /*
  * Where the flash array landed. Declared in ok_hal.h, which every
  * firmware translation unit reaches, because okcore.h's rebased address
- * constants name it and okcore.h includes nothing of ours.
+ * constants name it and okcore.h includes nothing of ours. Zero until
+ * okemu_hal_init() has mapped the file. Windows and Android both let the
+ * kernel choose the address; node on Linux maps at the real address, 0.
  */
 extern "C" uintptr_t okemu_flash_base = 0;
 #endif
@@ -304,6 +306,38 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
       fprintf(stderr, "[okemu] flash mapped at %p (%lu KB)\n",
               wfp, (unsigned long)(OKEMU_FLASH_SIZE / 1024));
   }
+#elif defined(__ANDROID__)
+  /*
+   * THE KERNEL PICKS THE ADDRESS. We only have to tell the firmware which.
+   *
+   * A fixed base with MAP_FIXED_NOREPLACE, and fallback offsets when that
+   * fails, is a bet that some particular address is free, against whatever
+   * the host runtime maps - which changes per device and per OS. 0x44000000
+   * was measured free on one handset and is ART's JIT zygote cache on a
+   * Pixel 6a running Android 16:
+   *
+   *     44000000-46000000 r-xs  /memfd:jit-zygote-cache (deleted)
+   *
+   * so the firmware could not start at all, and fallbacks cannot help
+   * because they are offsets INSIDE the array and land in the same range.
+   * Android also forbids the real address: vm.mmap_min_addr is 0x8000 and an
+   * unprivileged app cannot lower it, while certified_hw sits at 0x5BB0.
+   *
+   * Asking for NULL removes the bet. The firmware never sees the difference:
+   * its address constants are all OKEMU_FLASH_BASE + offset (scripts/stage.js
+   * rebases okcore.h), so the layout is identical and only the origin moves.
+   * The whole 256 KB maps or nothing does, so certified_hw at +0x5BB0 is
+   * always present and low_mapped stays true: FSEC below is 0xFF.
+   */
+  bool low_mapped = true;
+  size_t off = 0;
+  void *fp = mmap(nullptr, OKEMU_FLASH_SIZE, PROT_READ | PROT_WRITE,
+                  MAP_SHARED, g.flash_fd, 0);
+  if (fp == MAP_FAILED) {
+    snprintf(err, errlen, "cannot map flash: %s", strerror(errno));
+    return -1;
+  }
+  okemu_flash_base = (uintptr_t)fp;
 #else
   bool low_mapped = true;
   size_t off = 0;
@@ -397,6 +431,7 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
    */
   *reg8(kFTFL_FSEC) = 0x44;
 #else
+  /* Android always takes 0xFF: its mapping is never partial (see above). */
   *reg8(kFTFL_FSEC) = low_mapped ? 0xFF : 0x44;
 #endif
 

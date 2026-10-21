@@ -1,0 +1,29 @@
+/*
+ * Standalone build of the :okemu library - only used when Gradle is pointed at
+ * this folder directly (gradlew -p emulator/android ...). A host app that
+ * includes this module uses its own settings.gradle, and this file is ignored.
+ *
+ * The versions are ok-edge's (Expo SDK 58 / React Native 0.88): AGP 9.2.1 and
+ * Kotlin 2.2.0, from react-native/gradle/libs.versions.toml. A host's own
+ * buildscript classpath wins over these when the module is included there.
+ */
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    plugins {
+        id "com.android.library" version "9.2.1"
+        id "org.jetbrains.kotlin.android" version "2.2.0"
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "okemu"

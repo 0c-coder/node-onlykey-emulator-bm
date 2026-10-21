@@ -41,8 +41,17 @@ const path = require('path');
 
 const EMU = path.resolve(__dirname, '..');
 const ROOT = path.resolve(EMU, '..');
-/* The components are checkouts beside this repo, not inside it - see setup.sh. */
-const CHECKOUTS = path.resolve(ROOT, '..');
+/*
+ * The components are checkouts beside this repo, not inside it - see setup.sh.
+ *
+ * OKEMU_CHECKOUTS names that folder when this repo is NOT beside them: consumed
+ * as a package (another project's node_modules/node-onlykey-emulator), the
+ * parent folder holds node_modules' neighbours, not OnlyKey-Firmware,
+ * libraries and arduino-1.6.5-r5-teensy_127. Unset, nothing changes.
+ */
+const CHECKOUTS = process.env.OKEMU_CHECKOUTS
+  ? path.resolve(process.env.OKEMU_CHECKOUTS)
+  : path.resolve(ROOT, '..');
 const ARDUINO = path.join(CHECKOUTS, 'arduino-1.6.5-r5-teensy_127', 'arduino-1.6.5-r5');
 const CORE_SRC = path.join(ARDUINO, 'hardware', 'teensy', 'avr', 'cores', 'teensy3');
 const TLIB = path.join(ARDUINO, 'hardware', 'teensy', 'avr', 'libraries');
@@ -2324,6 +2333,8 @@ function cleanOnSwap(release) {
     path.join(EMU, 'build', 'Debug'),
     path.join(EMU, '.cxx'),                      // an Android (CMake) build
     path.join(EMU, 'build', 'intermediates', 'cxx'),
+    path.join(EMU, 'android', '.cxx'),           // emulator/android, the Gradle module
+    path.join(EMU, 'android', 'build', 'intermediates', 'cxx'),
   ];
   let removed = 0;
   for (const dir of targets) {
