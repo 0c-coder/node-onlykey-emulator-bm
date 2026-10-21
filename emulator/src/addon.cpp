@@ -186,6 +186,49 @@ Napi::Value Start(const Napi::CallbackInfo &info) {
   return env.Undefined();
 }
 
+/*
+ * sendHidTaken(buffer, iface[, timeoutMs]) -> Promise<boolean>: the write a USB
+ * host gets from a hard key - settled once the firmware has TAKEN the report
+ * (true), or at the deadline (false; the write still stands). The wait runs on
+ * a worker thread: on the JS thread it would stall Node's event loop, and with
+ * it an Electron main process (ok_hal.cpp, okemu_hid_wait_taken). sendHid stays
+ * as it was, for callers that only queue.
+ */
+class TakenWorker : public Napi::AsyncWorker {
+ public:
+  TakenWorker(Napi::Env env, uint64_t ticket, uint32_t ms)
+      : Napi::AsyncWorker(env), deferred(Napi::Promise::Deferred::New(env)), ticket_(ticket), ms_(ms) {}
+  void Execute() override { taken_ = okemu_hid_wait_taken(ticket_, ms_); }
+  void OnOK() override { deferred.Resolve(Napi::Boolean::New(Env(), taken_ != 0)); }
+  Napi::Promise::Deferred deferred;
+
+ private:
+  uint64_t ticket_;
+  uint32_t ms_;
+  int taken_ = 0;
+};
+
+Napi::Value SendHidTaken(const Napi::CallbackInfo &info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !info[0].IsBuffer() || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "sendHidTaken(buffer, iface[, timeoutMs]) requires a Buffer and an interface")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto buf = info[0].As<Napi::Buffer<uint8_t>>();
+  int iface = info[1].As<Napi::Number>().Int32Value();
+  uint32_t ms = (info.Length() > 2 && info[2].IsNumber()) ? info[2].As<Napi::Number>().Uint32Value() : 1000;
+  uint64_t ticket = 0;
+  if (okemu_hid_deliver_ticket(buf.Data(), buf.Length(), iface, &ticket) != 0) {
+    Napi::Error::New(env, "interface is not writable (use 1 = FIDO, 2 = vendor, 3 = SEREMU)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  auto *worker = new TakenWorker(env, ticket, ms);
+  Napi::Promise promise = worker->deferred.Promise();
+  worker->Queue();
+  return promise;
+}
+
 Napi::Value SendHid(const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1 || !info[0].IsBuffer()) {
@@ -335,6 +378,7 @@ Napi::Value Stop(const Napi::CallbackInfo &info) {
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("start",        Napi::Function::New(env, Start));
   exports.Set("sendHid",      Napi::Function::New(env, SendHid));
+  exports.Set("sendHidTaken", Napi::Function::New(env, SendHidTaken));
   exports.Set("setButton",    Napi::Function::New(env, SetButton));
   exports.Set("pressQueue",      Napi::Function::New(env, PressQueue));
   exports.Set("pressPending",    Napi::Function::New(env, PressPending));

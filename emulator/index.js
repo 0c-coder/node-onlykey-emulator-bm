@@ -222,6 +222,19 @@ class OnlyKeyEmulator extends EventEmitter {
     native.sendHid(buffer, iface);
   }
 
+  /**
+   * The write a USB host gets from a hard key: resolves once the firmware has TAKEN the report
+   * (true), or at the deadline (false; the write still stands). A host that presses right after
+   * a write - a challenge's digits - needs this order, or a press can land before the frame that
+   * arms it (v3.0.2's intermittent "incorrect challenge"; src/ok_hal.cpp). The wait runs off the
+   * JS thread, so Node's event loop - and an Electron main process - keeps running.
+   * @returns {Promise<boolean>}
+   */
+  writeHidTaken(buffer, iface = IFACE.VENDOR, timeoutMs = 1000) {
+    if (!Buffer.isBuffer(buffer)) buffer = Buffer.from(buffer);
+    return native.sendHidTaken(buffer, iface, timeoutMs);
+  }
+
   /** Raw analog touch pad state. The HID4 path above is the supported route. */
   setButton(n, down) { native.setButton(n, !!down); }
 

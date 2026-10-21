@@ -209,6 +209,13 @@ void okemu_led_show(void);               /* flush to the LED sink */
  * success, -1 if the interface cannot accept input.
  */
 int  okemu_hid_deliver(const uint8_t *data, size_t len, int iface);
+/*
+ * The same, handing back a ticket for a vendor report (0 for any other), and
+ * the wait for the firmware to have TAKEN it: 1 when taken, 0 at the deadline.
+ * Wait on a host thread of your own - never the firmware's, never a JS thread.
+ */
+int  okemu_hid_deliver_ticket(const uint8_t *data, size_t len, int iface, uint64_t *ticket);
+int  okemu_hid_wait_taken(uint64_t ticket, uint32_t timeout_ms);
 /* device -> host; `iface` is OKEMU_IFACE_FIDO or OKEMU_IFACE_VENDOR. */
 int  okemu_hid_emit(const uint8_t *data, size_t len, uint32_t timeout, int iface);
 /*

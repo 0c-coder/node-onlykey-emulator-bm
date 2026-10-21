@@ -85,6 +85,12 @@ struct Hal {
   struct InPkt { int iface; std::vector<uint8_t> data; };
   std::deque<InPkt> hid_in;
   std::condition_variable hid_cv;
+  /* Vendor reports queued and taken, for okemu_hid_wait_taken(). Vendor
+   * reports leave hid_in in order (only FIDO ones jump ahead), so a ticket is
+   * taken once vendor_taken reaches it. (From ok-rn's okemu, a236976.) */
+  uint64_t vendor_pushed = 0;
+  uint64_t vendor_taken = 0;
+  std::condition_variable hid_taken_cv;
 
   /* restart latch */
   bool restart = false;
@@ -451,6 +457,18 @@ void okemu_hal_shutdown(void) {
   if (g.flash) {
     msync((void *)(OKEMU_FLASH_BASE + g.flash_mapped_off),
           OKEMU_FLASH_SIZE - g.flash_mapped_off, MS_SYNC);
+    /*
+     * Unmap, do not just sync (from ok-rn's okemu, 4e4835c). A restart used to
+     * be a PROCESS restart - pm2 respawns the daemon and the address space goes
+     * with it. Hosted in an app the process outlives the firmware - ok-rn on
+     * Android, ok-edge's Electron main process - so a mapping left behind makes
+     * the next okemu_hal_init() fail ("cannot map flash: File exists" with
+     * MAP_FIXED_NOREPLACE).
+     */
+    munmap((void *)(OKEMU_FLASH_BASE + g.flash_mapped_off),
+           OKEMU_FLASH_SIZE - g.flash_mapped_off);
+    g.flash = nullptr;
+    g.flash_mapped_off = 0;
   }
   if (g.flash_fd >= 0) { ::close(g.flash_fd); g.flash_fd = -1; }
 }
@@ -830,6 +848,37 @@ void okemu_led_show(void) {
 /* ------------------------------------------------------------ RawHID */
 
 int okemu_hid_deliver(const uint8_t *data, size_t len, int iface) {
+  return okemu_hid_deliver_ticket(data, len, iface, nullptr);
+}
+
+/*
+ * A VENDOR WRITE CAN WAIT UNTIL THE FIRMWARE HAS TAKEN THE REPORT - the order a
+ * USB write gives a hard key, whose OUT transfer completes when the device
+ * accepts it. Returning on the queue lets a host run ahead of the device:
+ * okcrypto.sign() hands out the challenge digits as soon as the last frame is
+ * written, presses go through a separate queue (okemu_press), and the firmware
+ * could take the first press BEFORE the frame that arms the challenge - v3.0.2's
+ * intermittent "incorrect challenge" (ok-rn's okemu found and fixed it, a236976).
+ * The firmware is single-threaded, so once it has taken the frame it processes
+ * it - and arms the challenge - before it can take a press.
+ *
+ * WHERE to wait is the host's: the wait must never run on the firmware thread
+ * (it would wait on itself) nor on a JavaScript thread (Node's event loop, an
+ * Electron main process). So delivering hands back a ticket and
+ * okemu_hid_wait_taken() waits for it - ok-rn's JNI on its write executor, the
+ * Node addon's sendHidTaken() on a worker thread. Only vendor reports get a
+ * ticket: that is where press-confirmed operations are asked for.
+ */
+int okemu_hid_wait_taken(uint64_t ticket, uint32_t timeout_ms) {
+  if (!ticket) return 1;
+  std::unique_lock<std::mutex> lk(g.mu);
+  /* the deadline keeps the old behaviour if the firmware is busy elsewhere: the write stands, the wait stops */
+  return g.hid_taken_cv.wait_for(lk, std::chrono::milliseconds(timeout_ms),
+                                 [ticket] { return g.vendor_taken >= ticket; }) ? 1 : 0;
+}
+
+int okemu_hid_deliver_ticket(const uint8_t *data, size_t len, int iface, uint64_t *ticket) {
+  if (ticket) *ticket = 0;
   if (iface == OKEMU_IFACE_SEREMU) {
     /* Debug console input: bytes, not 64-byte reports. */
     {
@@ -858,6 +907,10 @@ int okemu_hid_deliver(const uint8_t *data, size_t len, int iface) {
   {
     std::lock_guard<std::mutex> lk(g.mu);
     g.hid_in.push_back(std::move(pkt));
+    if (iface == OKEMU_IFACE_VENDOR) {
+      ++g.vendor_pushed;
+      if (ticket) *ticket = g.vendor_pushed;
+    }
   }
   g.hid_cv.notify_one();
   stream_emit(snap, sizeof snap, iface, OKEMU_DIR_IN);
@@ -885,6 +938,11 @@ int okemu_hid_recv(void *buf, uint32_t timeout) {
   memcpy(buf, it->data.data(), 64);
   int iface = it->iface;
   g.hid_in.erase(it);
+  if (iface == OKEMU_IFACE_VENDOR) {
+    g.vendor_taken++;
+    /* under the lock on purpose: the waiter re-checks vendor_taken under it */
+    g.hid_taken_cv.notify_all();
+  }
   return iface;
 }
 
@@ -899,6 +957,9 @@ int okemu_hid_pending(void) {
 void okemu_hid_flush_in(void) {
   std::lock_guard<std::mutex> lk(g.mu);
   g.hid_in.clear();
+  /* a flushed report will never be taken; release anyone waiting on one */
+  g.vendor_taken = g.vendor_pushed;
+  g.hid_taken_cv.notify_all();
 }
 
 int okemu_hid_emit(const uint8_t *data, size_t len, uint32_t /*timeout*/, int iface) {
