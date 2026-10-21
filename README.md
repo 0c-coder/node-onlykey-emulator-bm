@@ -378,6 +378,23 @@ npm install
 npm run rebuild
 ```
 
+**DEBUG is OFF by default** - every build, the working tree and pinned
+releases alike: the standard from the 3.1.0 PRs. A build for the test kit
+(`onlykey-testing`) needs it ON, because the kit presses buttons through the
+firmware's DEBUG console, which a production build does not have:
+
+```sh
+OKEMU_DEBUG=1 npm run rebuild
+```
+
+`.stage/build.json` says which one you have (`"debug"`, read back from the
+staged `onlykey.h`). The emulator's own tests (`test/press.js`, `taken.js`) and
+`scripts/matrix.js` use the native press queue and work on either.
+
+After pulling a change to `scripts/stage.js` that alters the source list (a
+file added to or dropped from the build), run `npm run rebuild` once:
+`npm run build` reuses the configured project and will look for the old list.
+
 ### On Windows instead
 
 Steps 1 and 2 above are Linux-only: `setup.sh` and `setup-permissions.sh` are
