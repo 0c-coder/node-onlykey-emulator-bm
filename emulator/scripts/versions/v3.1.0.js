@@ -41,7 +41,7 @@ module.exports = {
   version: 'v3.1.0',
   pins: { libraries: '37aa531', 'OnlyKey-Firmware': '9fceea1' },
   status: 'untried',
-  emulator: { linux: 'boots', win32: 'untried' },   /* node-onlykey-emulator's own ladder: boots = matrix stage/build/press/compat PASS on the SIGNED build. At 37aa531: linux (ZBOX x64) 2026-10-21; win32 not yet run. (Was 'boots' on both at eb25290, 2026-09-28.) */
+  emulator: { linux: 'boots', win32: 'boots' },   /* node-onlykey-emulator's own ladder: boots = matrix stage/build/press/compat PASS on the SIGNED build. At 37aa531: linux (ZBOX x64) and win32, 2026-10-21. (Was 'boots' on both at eb25290, 2026-09-28.) */
   slot: 'v3.1.0',
   notes: [
     'The release candidate: trustcrypto release-3.1.0 (libraries PR #33,',
