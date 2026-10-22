@@ -344,6 +344,11 @@ Napi::Value PressQueue(const Napi::CallbackInfo &info) {
   return Napi::Number::New(env, n);
 }
 
+/* What the firmware is waiting for, packed (ok_hal.h okemu_confirm_state); -1 when it cannot say. */
+Napi::Value ConfirmState(const Napi::CallbackInfo &info) {
+  return Napi::Number::New(info.Env(), okemu_confirm_state());
+}
+
 /* Presses queued but not yet taken by the firmware; 0 means all taken. */
 Napi::Value PressPending(const Napi::CallbackInfo &info) {
   return Napi::Number::New(info.Env(), okemu_press_pending());
@@ -406,6 +411,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("setButton",    Napi::Function::New(env, SetButton));
   exports.Set("pressQueue",      Napi::Function::New(env, PressQueue));
   exports.Set("pressPending",    Napi::Function::New(env, PressPending));
+  exports.Set("confirmState",    Napi::Function::New(env, ConfirmState));
   exports.Set("setButtonTicks",  Napi::Function::New(env, SetButtonTicks));
   exports.Set("buttonTicksLeft", Napi::Function::New(env, ButtonTicksLeft));
   exports.Set("rounds",          Napi::Function::New(env, Rounds));

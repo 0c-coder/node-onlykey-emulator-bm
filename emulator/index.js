@@ -163,8 +163,34 @@ class OnlyKeyEmulator extends EventEmitter {
     }
   }
 
+  /**
+   * A line of presses each held for the same `ticks` sense rounds, as the phone app asks for them
+   * (NativeOkEmu.pressQueue: "123" = pads 1, 2 and 3). Checked before queueing, as pressButtons
+   * is: a line that does not fit presses nothing.
+   * @returns {number} the presses queued
+   */
+  pressQueue(buttons, ticks) {
+    const pads = String(buttons).split('').map(Number);
+    if (!pads.length || pads.some((n) => !Number.isInteger(n) || n < 1 || n > 6)) {
+      throw new RangeError(`buttons are the digits 1..6, got "${buttons}"`);
+    }
+    if (!Number.isInteger(ticks) || ticks <= 0) throw new RangeError(`ticks must be positive, got ${ticks}`);
+    const room = PRESS_QUEUE_MAX - native.pressPending();
+    if (pads.length > room) throw new RangeError(`${pads.length} presses, the queue has room for ${room}`);
+    return native.pressQueue(pads, pads.map(() => ticks));
+  }
+
+  /** A finger on pad n for exactly `ticks` sense rounds (src/ok_hal.h okemu_set_button_ticks). */
+  setButtonTicks(n, ticks) { native.setButtonTicks(n, ticks); }
+
+  /** Rounds still owed on a counted hold on pad n - the press timer an app shows. */
+  buttonTicksLeft(n) { return native.buttonTicksLeft(n); }
+
   /** Presses queued but not yet taken by the firmware; 0 once all are in. */
   pressPending() { return native.pressPending(); }
+
+  /** What the firmware is waiting for, packed (src/ok_hal.h okemu_confirm_state); -1 when it cannot say. */
+  confirmState() { return native.confirmState(); }
 
   /** Sense rounds the firmware has completed since start - proof it is running. */
   rounds() { return native.rounds(); }

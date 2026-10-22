@@ -180,6 +180,18 @@ int  okemu_touch_for_pin(uint8_t pin);   /* pin -> simulated capacitance */
  */
 void okemu_set_button_ticks(int n, int ticks);
 
+/*
+ * What the firmware is waiting for, packed for one cheap poll (an app reads it a few times a
+ * second while the soft key runs):
+ *   bits 0-7   CRYPTO_AUTH (0 = nothing waits)
+ *   bits 8-15  the opcode waiting (packet_buffer_details[0])
+ *   bits 16-23 its slot (packet_buffer_details[1])
+ *   bits 24-26 user_input_mode (0 code, 1 press, 2 none; 7 = this firmware has none)
+ *   bit  27    isfade (the wait window is open)
+ * -1 when the staged firmware lacks these. The caller checks the firmware is running.
+ */
+int okemu_confirm_state(void);
+
 /* Samples still owed on a counted hold; 0 when the button is not counting. */
 int  okemu_button_ticks_left(int n);
 

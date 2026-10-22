@@ -1097,3 +1097,48 @@ void okemu_random_bytes(uint8_t *out, size_t len) {
 }
 
 }  // extern "C"
+
+/*
+ * okemu_confirm_state - what the firmware is waiting on, packed (ok_hal.h).
+ *
+ * The four globals are the firmware's own, with C++ linkage, read in place:
+ *   CRYPTO_AUTH              1..3 while a request waits (1, 2 = code digits so far, 3 = the last
+ *                            digit or a single press), 0 when nothing waits
+ *   packet_buffer_details    [0] the opcode waiting, [1] its slot
+ *   user_input_mode          code / press / none - only from 3.1.0
+ *   isfade                   the wait window is open
+ *
+ * A staged firmware may lack one (user_input_mode before 3.1.0), so each is a FALLBACK reference:
+ * weak on GCC/Clang ELF, and on Windows a /alternatename to a stand-in that is used only when the
+ * firmware does not define the symbol (the same mechanism as Profile_Offset above). A missing
+ * CRYPTO_AUTH, isfade or packet_buffer_details answers -1; a missing user_input_mode reads as 7.
+ */
+#if defined(_WIN32)
+uint8_t okemu_absent_byte = 0;
+uint8_t okemu_absent_details[5] = {0};
+extern uint8_t CRYPTO_AUTH;
+extern uint8_t isfade;
+extern uint8_t packet_buffer_details[5];
+extern uint8_t user_input_mode;
+#pragma comment(linker, "/alternatename:?CRYPTO_AUTH@@3EA=?okemu_absent_byte@@3EA")
+#pragma comment(linker, "/alternatename:?isfade@@3EA=?okemu_absent_byte@@3EA")
+#pragma comment(linker, "/alternatename:?user_input_mode@@3EA=?okemu_absent_byte@@3EA")
+#pragma comment(linker, "/alternatename:?packet_buffer_details@@3PAEA=?okemu_absent_details@@3PAEA")
+#define OKEMU_HAS(sym, standin) ((const void *)&(sym) != (const void *)&(standin))
+#else
+extern uint8_t CRYPTO_AUTH __attribute__((weak));
+extern uint8_t isfade __attribute__((weak));
+extern uint8_t packet_buffer_details[5] __attribute__((weak));
+extern uint8_t user_input_mode __attribute__((weak));
+#define OKEMU_HAS(sym, standin) ((const void *)&(sym) != nullptr)
+#endif
+
+extern "C" int okemu_confirm_state(void) {
+  if (!OKEMU_HAS(CRYPTO_AUTH, okemu_absent_byte) || !OKEMU_HAS(isfade, okemu_absent_byte)
+      || !OKEMU_HAS(packet_buffer_details, okemu_absent_details)) {
+    return -1;
+  }
+  const uint32_t mode = OKEMU_HAS(user_input_mode, okemu_absent_byte) ? (user_input_mode & 0x7u) : 7u;
+  return (int)((uint32_t)CRYPTO_AUTH | ((uint32_t)packet_buffer_details[0] << 8)
+                | ((uint32_t)packet_buffer_details[1] << 16) | (mode << 24) | ((uint32_t)(isfade ? 1 : 0) << 27));
+}
