@@ -2305,8 +2305,29 @@ function listVersions() {
  * loop stays incremental. This costs a full recompile exactly when the
  * alternative is a build that cannot be trusted.
  */
+/*
+ * ONE IDENTITY PER KIND OF BUILD. The Node addon (node-linux / node-win32) and the Android library
+ * keep their objects in different places, and a tree is staged for one and then the other (ok-edge
+ * builds its Android app and runs the addon on the desktop from one checkout). A single identity
+ * made each a swap for the other and wiped both - an Android build deleted the desktop's .node. So
+ * each kind keeps its own marker and drops only its own objects; the other's stay as they were.
+ */
+const BUILD_KIND = TARGET === 'android' ? 'android' : 'node';
+const OBJECT_DIRS = {
+  node: [
+    path.join(EMU, 'build', 'Release'),          // node-gyp objects + the .node
+    path.join(EMU, 'build', 'Debug'),
+  ],
+  android: [
+    path.join(EMU, '.cxx'),                      // an Android (CMake) build
+    path.join(EMU, 'build', 'intermediates', 'cxx'),
+    path.join(EMU, 'android', '.cxx'),           // emulator/android, the Gradle module
+    path.join(EMU, 'android', 'build', 'intermediates', 'cxx'),
+  ],
+};
+
 function cleanOnSwap(release) {
-  const marker = path.join(EMU, '.stage-identity');
+  const marker = path.join(EMU, `.stage-identity-${BUILD_KIND}`);
   const identity = [
     release.version,
     TARGET,
@@ -2328,14 +2349,7 @@ function cleanOnSwap(release) {
 
   if (previous === identity) return;
 
-  const targets = [
-    path.join(EMU, 'build', 'Release'),          // node-gyp objects + the .node
-    path.join(EMU, 'build', 'Debug'),
-    path.join(EMU, '.cxx'),                      // an Android (CMake) build
-    path.join(EMU, 'build', 'intermediates', 'cxx'),
-    path.join(EMU, 'android', '.cxx'),           // emulator/android, the Gradle module
-    path.join(EMU, 'android', 'build', 'intermediates', 'cxx'),
-  ];
+  const targets = OBJECT_DIRS[BUILD_KIND];
   let removed = 0;
   for (const dir of targets) {
     if (!fs.existsSync(dir)) continue;

@@ -9,9 +9,9 @@ emulator/.stage/
 # .stage-src/<version>/ holds released firmware trees unpacked from git by
 # OKEMU_VERSION staging (~6 MB each) - rebuilt from the pinned commits on demand.
 emulator/.stage-src/
-# .stage-identity records what the last stage was (version, target, gates,
-# plugins); scripts/stage.js drops the compiled objects when it changes.
-emulator/.stage-identity
+# .stage-identity-node / -android record what the last stage of each kind of build was (version,
+# target, gates, plugins); scripts/stage.js drops that kind's compiled objects when it changes.
+emulator/.stage-identity*
 # .matrix/ keeps each release's build log from scripts/matrix.js.
 emulator/.matrix/
 
