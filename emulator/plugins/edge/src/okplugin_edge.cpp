@@ -23,8 +23,8 @@
  * A budget's uses form a hash series: G = H^n(seed), n <= 1024; use i reveals
  * v_i = H^(n-i)(seed), so a verifier checks H^i(v_i) == G.
  *
- * Runs in the soft key and the desktop emulator: the flash region it uses (base+0x1000) is
- * the bootloader's on a Teensy, and file-backed and otherwise unused in the emulators.
+ * Runs in the soft key, the desktop emulator and a developer hard key; where its two flash
+ * sectors live differs between them (EDGE_REGION below).
  */
 #include "core_pins.h" /* millis() */
 #include "onlykey.h"
@@ -80,8 +80,28 @@ extern void okcrypto_hkdf_info(const void *salt, const void *inputKey, void *out
 
 /* ------------------------------------------------------------ flash: one small record */
 
-/* base + 0x1000, from the firmware's own constant so it follows OKEMU_FLASH_BASE */
+/*
+ * Two 2 KB sectors, A and B. OK_EMULATOR is defined by every emulator build (binding.gyp,
+ * android/CMakeLists.txt) and never by the device toolchain, so it tells the two apart.
+ * (Not OKEMU_FLASH_BASE: the Linux addon maps its flash at 0 and leaves that undefined.)
+ *
+ * - Emulators: base + 0x1000, from the firmware's own constant so it follows
+ *   OKEMU_FLASH_BASE. On a Teensy that is the bootloader's; in an emulator it is
+ *   file-backed and otherwise unused.
+ * - A developer hard key (Teensy 3.2 flashed through HalfKay): 0x39000 and 0x39800. Its
+ *   image is linked at 0 and ends near 0x33000; 3.1.0's data storage starts at
+ *   flashstorestart (0x3A800) and every one of its 11 sectors has an owner, while nothing
+ *   addresses the sectors between the code and 0x3A000 (ok-edge TODO.md, A1). The
+ *   hard-key build refuses an image whose code reaches 0x39000.
+ *   NOT a production placement: on a key with the signed bootloader these sectors sit
+ *   inside the window fw_hash() hashes for it (fwstartadr .. 0x3A05F), so every write
+ *   here would change what the bootloader verifies.
+ */
+#ifdef OK_EMULATOR
 #define EDGE_REGION ((uintptr_t)factorysectoradr - 0x4800)
+#else
+#define EDGE_REGION ((uintptr_t)0x39000)
+#endif
 #define EDGE_STATE_A (EDGE_REGION + 0x0000)
 #define EDGE_STATE_B (EDGE_REGION + 0x0800)
 

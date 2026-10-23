@@ -16,7 +16,7 @@
 module.exports = {
   name: 'edge',
   minBase: '3.1.0',
-  notes: 'OKEDGE 0xF8: budgets at a press, each use linked in the key\'s chain (soft key only)',
+  notes: 'OKEDGE 0xF8: budgets at a press, each use linked in the key\'s chain (soft key; developer hard key via tools/build-hardkey.sh)',
   /* a section in the backup: seq, head, the owed uses and the device id (okplugin_edge_backup) */
   backup: true,
   hooks: [

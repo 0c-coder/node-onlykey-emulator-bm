@@ -7,9 +7,9 @@ hash chain that only the key extends. Every use owes a **receipt** from the agen
 **checkpoints** over its chain, so a host can prove its copy is the key's.
 
 **Protocol and schemas:** v1, the first release.
-**Runs on:** the soft key only - the firmware compiled into the ok-rn Android app, and the desktop
-emulator. A hard key has no free flash sector for the plugin's state today
-([WHITEPAPER.md](WHITEPAPER.md) §3).
+**Runs on:** the soft key (the firmware compiled into the Android app, and the desktop emulator)
+and a developer hard key built with `tools/build-hardkey.sh`. Not a production key: where its state
+would live there is the maintainers' call ([WHITEPAPER.md](WHITEPAPER.md) §3).
 
 ## What the key does
 
