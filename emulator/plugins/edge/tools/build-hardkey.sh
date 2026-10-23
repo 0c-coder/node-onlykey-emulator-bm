@@ -6,7 +6,7 @@
 #   bash tools/build-hardkey.sh            # -> $OUT/images/v3.1.0-test-<plugins>-fw<FW_PIN>-lib<LIB_PIN>.hex
 #
 # The base is the 3.1.0 release candidate WITH the fixes found testing it (libraries 37aa531 + 0008
-# + 0009 + 0010 = LIB_PIN), so the hard key runs the same firmware as the soft key's plugin build.
+# + 0009 + 0010 + 0011 = LIB_PIN), so the hard key runs the same firmware as the soft key's plugin build.
 #
 # Why each step is the way it is:
 # - Plain clones of the source checkouts, not worktrees: the toolchain image copies the firmware tree
@@ -28,7 +28,7 @@ SRC="${FW_SRC:-$ROOT/fw-3.1.0-pr}"                    # source checkouts + the A
 OUT="${FW_OUT:-$ROOT/fw-edge}"
 KIT="${KIT:-$ROOT/onlykey-testing}"                   # its lib/flash.js reads Intel HEX
 FW_PIN="${FW_PIN:-9fceea1}"
-LIB_PIN="${LIB_PIN:-2ce5fce}"
+LIB_PIN="${LIB_PIN:-b273489}"
 PLUGINS="${PLUGINS:-edge}"
 LIMIT="${LIMIT:-0x39800}"                              # the first byte the code must not reach
 IMAGE=onlykey/onlykey-firmware-toolchain

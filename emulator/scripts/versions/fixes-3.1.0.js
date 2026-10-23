@@ -3,24 +3,25 @@
 /**
  * The fixes found testing the 3.1.0 release candidate, as staged edits on its pinned libraries
  * (37aa531). With them the soft key runs the same firmware as a developer hard key built by
- * plugins/edge/tools/build-hardkey.sh (libraries 2ce5fce = 37aa531 + these), so a difference
+ * plugins/edge/tools/build-hardkey.sh (libraries b273489 = 37aa531 + these), so a difference
  * between the two is never the base.
  *
  *   0008  fido2: Windows sends every WebAuthn request twice - a repeated poll is served the same
  *         chunk again, and a repeated data packet is never acted on (2 commits)
  *   0009  fido2: the version status copied after the transit key is bounded by ecc_public_key
  *   0010  okcore: the nonce check sums the bytes it read, not always 32
+ *   0011  okcore: a composite PQC PGP key is backed up and restored as its 160-byte blob
  *
- * GENERATED from the patch files (onlykey-RN/patches/0008..0010, as sent to the maintainer) and
- * PROVEN when generated: applied in this order to the files at 37aa531 they give exactly the files
- * at 2ce5fce, and every find string occurs once. Regenerate rather than edit: a hand change here
- * stops being the patch the maintainer has.
+ * GENERATED from the patch files (onlykey-RN/patches/0008..0011) and PROVEN when generated:
+ * applied in this order to the files at 37aa531 they give exactly the files at b273489, and
+ * every find string occurs once. Regenerate rather than edit: a hand change here stops being
+ * the patch the maintainer has.
  *
  * Applied by v3.1.0.js unless OKEMU_RC_FIXES=0 (the RC exactly as published, for the
  * compatibility matrix). build.json records which, as `fixes`.
  */
 module.exports = {
-  names: ['0008', '0009', '0010'],
+  names: ['0008', '0009', '0010', '0011'],
   patches: [
     /* 0008-fido2-windows-duplicate-requests.patch: fido2: serve the same chunk again for a repeated poll */
     {
@@ -78,6 +79,16 @@ module.exports = {
       edits: [
         ["    Serial.println(\"Reading nonce\");\n#endif\n    okcore_flashget_common(ptr, (unsigned long *)adr, size);\n    for (int i = 0; i < 32; i++) {\n        set = *(ptr + i) + set;\n    }\n#ifdef DEBUG\n    Serial.println(set);\n#endif\n    if (set == 8160) { //0xFF * 32\n#ifdef DEBUG\n        Serial.println(\"There is no Nonce hash set\");\n#endif\n",
          "    Serial.println(\"Reading nonce\");\n#endif\n    okcore_flashget_common(ptr, (unsigned long *)adr, size);\n    // Only the size bytes read into ptr: callers pass 12-byte buffers as well as 32-byte ones.\n    for (int i = 0; i < size; i++) {\n        set = *(ptr + i) + set;\n    }\n#ifdef DEBUG\n    Serial.println(set);\n#endif\n    if (set == 0xFF * size) { // every byte read is 0xFF: the sector was never written\n#ifdef DEBUG\n        Serial.println(\"There is no Nonce hash set\");\n#endif\n"],
+      ],
+    },
+    /* 0011-okcore-back-up-and-restore-a-composite-PQC-PGP-key.patch: okcore: back up and restore a composite PQC PGP key as its */
+    {
+      file: "libraries/onlykey/okcore.cpp",
+      edits: [
+        ["        if (slot == backupslot)\n            features = features + 0x80;\n        if (features != 0x00) {\n            large_temp[large_buffer_offset] = 0xFE; //delimiter\n            large_temp[large_buffer_offset + 1] = slot;\n            large_temp[large_buffer_offset + 2] = features;\n            memcpy(large_temp + large_buffer_offset + 3, rsa_private_key, (type * 128));\n            large_buffer_offset = large_buffer_offset + (type * 128) + 3;\n#ifdef DEBUG\n            byteprint(rsa_private_key, (type * 128));\n#endif\n        } else {\n#ifdef DEBUG\n",
+         "        if (slot == backupslot)\n            features = features + 0x80;\n        if (features != 0x00) {\n            /* An RSA key is type * 128 bytes; a composite PQC PGP key is its PQC_PGP_BLOB_LEN seed blob,\n             * which is all okcore_flashget_RSA() reads into rsa_private_key for that type. */\n            int keylen = (type == KEYTYPE_PQC_PGP) ? PQC_PGP_BLOB_LEN : (type * 128);\n            large_temp[large_buffer_offset] = 0xFE; //delimiter\n            large_temp[large_buffer_offset + 1] = slot;\n            large_temp[large_buffer_offset + 2] = features;\n            memcpy(large_temp + large_buffer_offset + 3, rsa_private_key, keylen);\n            large_buffer_offset = large_buffer_offset + keylen + 3;\n#ifdef DEBUG\n            byteprint(rsa_private_key, keylen);\n#endif\n        } else {\n#ifdef DEBUG\n"],
+        ["                        set_private(temp);\n                        ptr = ptr + 512;\n                        offset = offset - 515;\n                    } else {\n#ifdef DEBUG\n                        Serial.print(\"Error key configuration backup file format incorrect\");\n",
+         "                        set_private(temp);\n                        ptr = ptr + 512;\n                        offset = offset - 515;\n                    } else if ((temp[6] & 0x0F) == KEYTYPE_PQC_PGP) { //Expect PQC_PGP_BLOB_LEN Bytes\n#ifdef DEBUG\n                        Serial.print(\"Restore composite PQC PGP key\");\n#endif\n                        ptr++;\n                        memcpy(temp + 7, ptr, PQC_PGP_BLOB_LEN);\n                        set_private(temp);\n                        ptr = ptr + PQC_PGP_BLOB_LEN;\n                        offset = offset - (PQC_PGP_BLOB_LEN + 3);\n                    } else {\n#ifdef DEBUG\n                        Serial.print(\"Error key configuration backup file format incorrect\");\n"],
       ],
     },
   ],
