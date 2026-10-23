@@ -35,9 +35,18 @@
 'use strict';
 
 const workingTree = require('./working-tree');
+const rcFixes = require('./fixes-3.1.0');
+
+/*
+ * The fixes found testing the RC (0008-0010, fixes-3.1.0.js) are ON by default: the soft key then
+ * runs what the developer hard key runs. OKEMU_RC_FIXES=0 stages the RC exactly as published.
+ */
+const withFixes = process.env.OKEMU_RC_FIXES !== '0';
 
 module.exports = {
   ...workingTree,
+  patches: withFixes ? rcFixes.patches : [],
+  fixes: withFixes ? rcFixes.names : [],
   version: 'v3.1.0',
   pins: { libraries: '37aa531', 'OnlyKey-Firmware': '9fceea1' },
   status: 'untried',

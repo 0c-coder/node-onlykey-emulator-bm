@@ -252,6 +252,8 @@ function load(version) {
     okrnStatus: mod.status,
     notes: mod.notes || '',
     patches: mod.patches || [],
+    /* names of upstream fixes carried as patches (v3.1.0: 0008-0010); recorded in build.json */
+    fixes: mod.fixes || [],
     /**
      * Applied only when the DEBUG gate ends up OFF, whichever way it got
      * there - OKEMU_PRODUCTION=1, or a release that simply ships that way.

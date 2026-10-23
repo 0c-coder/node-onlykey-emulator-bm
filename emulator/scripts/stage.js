@@ -2622,6 +2622,8 @@ function main() {
     pins: release.pins ? { libraries: release.pins.libraries,
       'OnlyKey-Firmware': release.pins['OnlyKey-Firmware'] } : null,
     debug: debugOn,
+    /* fixes carried on top of the pins (v3.1.0: the RC's 0008-0010); [] = the release as published */
+    fixes: release.fixes || [],
     /* the machine that staged it; `target` is the build it was staged for */
     platform: versions.EMULATOR_PLATFORM,
     target: TARGET,
@@ -2649,6 +2651,7 @@ function main() {
     `  OnlyKey-Firmware / libraries:              ` +
       `${pins['OnlyKey-Firmware'] || gitShort(FW) || '?'} / ${pins.libraries || gitShort(LIB_SRC) || '?'}\n` +
     `  version:                                   ${release.version} (${status})\n` +
+    `  fixes on top of the pins:                  ${(release.fixes || []).join(', ') || 'none'}\n` +
     `  sources declare:                           ${declaredVersion || 'unknown'}\n` +
     `  target:                                    ${TARGET}\n` +
     `  build:                                     ${debugOn ? 'debug' : 'production'}\n` +
