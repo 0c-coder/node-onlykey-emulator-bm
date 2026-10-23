@@ -88,11 +88,12 @@ extern void okcrypto_hkdf_info(const void *salt, const void *inputKey, void *out
  * - Emulators: base + 0x1000, from the firmware's own constant so it follows
  *   OKEMU_FLASH_BASE. On a Teensy that is the bootloader's; in an emulator it is
  *   file-backed and otherwise unused.
- * - A developer hard key (Teensy 3.2 flashed through HalfKay): 0x39000 and 0x39800. Its
- *   image is linked at 0 and ends near 0x33000; 3.1.0's data storage starts at
- *   flashstorestart (0x3A800) and every one of its 11 sectors has an owner, while nothing
- *   addresses the sectors between the code and 0x3A000 (ok-edge TODO.md, A1). The
- *   hard-key build refuses an image whose code reaches 0x39000.
+ * - A developer hard key (Teensy 3.2 flashed through HalfKay): 0x39800 and 0x3A000, the
+ *   last two sectors before 3.1.0's data storage (flashstorestart, 0x3A800, whose 11
+ *   sectors all have owners). The image is linked at 0 and its code grows up towards
+ *   them; nothing addresses the sectors in between (ok-edge TODO.md, A1). The top two
+ *   leave the code the most room: a DEBUG build of 3.1.0 + Edge ends near 0x38400. The
+ *   hard-key build refuses an image whose code reaches 0x39800.
  *   NOT a production placement: on a key with the signed bootloader these sectors sit
  *   inside the window fw_hash() hashes for it (fwstartadr .. 0x3A05F), so every write
  *   here would change what the bootloader verifies.
@@ -100,7 +101,7 @@ extern void okcrypto_hkdf_info(const void *salt, const void *inputKey, void *out
 #ifdef OK_EMULATOR
 #define EDGE_REGION ((uintptr_t)factorysectoradr - 0x4800)
 #else
-#define EDGE_REGION ((uintptr_t)0x39000)
+#define EDGE_REGION ((uintptr_t)0x39800)
 #endif
 #define EDGE_STATE_A (EDGE_REGION + 0x0000)
 #define EDGE_STATE_B (EDGE_REGION + 0x0800)
