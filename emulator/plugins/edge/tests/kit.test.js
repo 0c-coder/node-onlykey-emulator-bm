@@ -702,7 +702,8 @@ module.exports = function register({ it }, ctx) {
         ]).then(() => true, () => device.keystrokes.length > 0);
       }
       assert.ok(started, 'the device never started a backup');
-      await device.waitKeystrokes(/-----END ONLYKEY BACKUP-----/, { timeoutMs: 180000, signal });
+      /* a hard key types at keyboard speed: the kit's own backup test waits as long (10-backup-restore) */
+      await device.waitKeystrokes(/-----END ONLYKEY BACKUP-----/, { timeoutMs: 600000, signal });
       const parsed = backup.parse(device.keystrokes);
       assert.ok(parsed && parsed.data.length, 'no backup data');
       log(`backup: ${parsed.data.length} bytes, taken at chain #${atBackup.seq}`);
