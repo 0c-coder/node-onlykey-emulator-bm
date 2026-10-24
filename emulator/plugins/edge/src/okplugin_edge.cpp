@@ -829,10 +829,16 @@ static void press_drop(void) {
   memset(&press, 0, sizeof(press));
 }
 
-/* wait for the physical press; okplugin_edge_primed forces it (USER_INPUT_PRESS) */
+/*
+ * wait for the physical press; okplugin_edge_primed forces it (USER_INPUT_PRESS). The LED pulses
+ * yellow (wheel position 43) while the press is awaited, as OKSIGN pulses purple (213) and
+ * OKDECRYPT turquoise (128) before their confirmation.
+ */
+#define EDGE_PRESS_COLOR 43
 static void press_wait(uint8_t what, const uint8_t subject[32]) {
   press.what = what;
   press.since = millis();
+  fadeon(EDGE_PRESS_COLOR);
   okcore_prime_user_confirmation(OKEDGE, 0, (uint8_t *)subject, 32);
 }
 
@@ -1097,13 +1103,17 @@ void okplugin_edge_decision(int decision) {
   if (packet_buffer_details[0] == OKEDGE) {
     uint8_t what = press.what;
     int fresh = what && millis() - press.since <= PRESS_MS;
-    if (decision != OKEDGE_DECISION_APPROVE || !fresh) { press_drop(); return; }
-    if (!ensure_identity()) { press_drop(); status(EDGE_NEED_PIN); return; }
+    /* a timeout or a wrong press: the core's own path ends the pulse (red) */
+    if (decision != OKEDGE_DECISION_APPROVE) { press_drop(); return; }
+    /* an approve that cannot be used ends the pulse red; a pressed action ends it green, as a finished OKSIGN */
+    if (!fresh) { press_drop(); fadeoff(1); return; }
+    if (!ensure_identity()) { press_drop(); fadeoff(1); status(EDGE_NEED_PIN); return; }
     if (what == PRESS_GRANT) grant_pressed();
     else if (what == PRESS_RESUME) resume_pressed();
     else if (what == PRESS_SETTLE) settle_pressed();
     else if (what == PRESS_LOSS) loss_pressed();
     press_drop();
+    fadeoff(85);
     return;
   }
   if (!pend.active) return;
