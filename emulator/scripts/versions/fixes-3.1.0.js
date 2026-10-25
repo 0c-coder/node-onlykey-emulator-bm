@@ -12,7 +12,8 @@
  *   0010  okcore: the nonce check sums the bytes it read, not always 32
  *   0011  okcore: a composite PQC PGP key is backed up and restored as its 160-byte blob
  *
- * GENERATED from the patch files (onlykey-RN/patches/0008..0011) and PROVEN when generated:
+ * GENERATED from the patch files in patches-3.1.0/ beside this file (0008..0011, each with its README - the
+ * patches as the maintainer has them) and PROVEN when generated:
  * applied in this order to the files at 37aa531 they give exactly the files at b273489, and
  * every find string occurs once. Regenerate rather than edit: a hand change here stops being
  * the patch the maintainer has.

@@ -1,0 +1,56 @@
+From b273489e5764c7b02609e16a4448f28dcc402f60 Mon Sep 17 00:00:00 2001
+From: bmatusiak <bmatusiak@gmail.com>
+Date: Fri, 23 Oct 2026 16:00:29 -0400
+Subject: [PATCH] okcore: back up and restore a composite PQC PGP key as its
+ 160-byte blob
+
+backup() copied type * 128 bytes from rsa_private_key for every RSA slot. For a composite PQC PGP slot type is 7, while okcore_flashget_RSA() reads only the PQC_PGP_BLOB_LEN seed blob, so the copy read 896 bytes of the 512-byte buffer. RESTORE() did not know type 7 in an RSA record and stopped with "Error key configuration backup file format incorrect".
+
+backup() now writes PQC_PGP_BLOB_LEN bytes for that type, and RESTORE() reads the record back through set_private(), as loadpqc stores it.
+---
+ onlykey/okcore.cpp | 18 +++++++++++++++---
+ 1 file changed, 15 insertions(+), 3 deletions(-)
+
+diff --git a/onlykey/okcore.cpp b/onlykey/okcore.cpp
+index b94f96e..d75e7cb 100644
+--- a/onlykey/okcore.cpp
++++ b/onlykey/okcore.cpp
+@@ -6199,13 +6199,16 @@ void backup() {
+         if (slot == backupslot)
+             features = features + 0x80;
+         if (features != 0x00) {
++            /* An RSA key is type * 128 bytes; a composite PQC PGP key is its PQC_PGP_BLOB_LEN seed blob,
++             * which is all okcore_flashget_RSA() reads into rsa_private_key for that type. */
++            int keylen = (type == KEYTYPE_PQC_PGP) ? PQC_PGP_BLOB_LEN : (type * 128);
+             large_temp[large_buffer_offset] = 0xFE; //delimiter
+             large_temp[large_buffer_offset + 1] = slot;
+             large_temp[large_buffer_offset + 2] = features;
+-            memcpy(large_temp + large_buffer_offset + 3, rsa_private_key, (type * 128));
+-            large_buffer_offset = large_buffer_offset + (type * 128) + 3;
++            memcpy(large_temp + large_buffer_offset + 3, rsa_private_key, keylen);
++            large_buffer_offset = large_buffer_offset + keylen + 3;
+ #ifdef DEBUG
+-            byteprint(rsa_private_key, (type * 128));
++            byteprint(rsa_private_key, keylen);
+ #endif
+         } else {
+ #ifdef DEBUG
+@@ -6795,6 +6798,15 @@ void RESTORE(uint8_t *buffer) {
+                         set_private(temp);
+                         ptr = ptr + 512;
+                         offset = offset - 515;
++                    } else if ((temp[6] & 0x0F) == KEYTYPE_PQC_PGP) { //Expect PQC_PGP_BLOB_LEN Bytes
++#ifdef DEBUG
++                        Serial.print("Restore composite PQC PGP key");
++#endif
++                        ptr++;
++                        memcpy(temp + 7, ptr, PQC_PGP_BLOB_LEN);
++                        set_private(temp);
++                        ptr = ptr + PQC_PGP_BLOB_LEN;
++                        offset = offset - (PQC_PGP_BLOB_LEN + 3);
+                     } else {
+ #ifdef DEBUG
+                         Serial.print("Error key configuration backup file format incorrect");
+-- 
+2.55.0
+
