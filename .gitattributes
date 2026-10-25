@@ -1,0 +1,2 @@
+# the maintainer's patch files, byte for byte: git am needs their own line endings
+emulator/scripts/versions/patches-3.1.0/** -text
