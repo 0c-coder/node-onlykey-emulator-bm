@@ -6,6 +6,9 @@
  * - one extra allowed site: the SHA-256 of an rpId, set in config mode;
  * - all of it behind one byte, read as ON while unset; turned off or on in config mode.
  *
+ * OKGETPUBKEY over the tunnel: the first payload byte is the key type (the tunnel puts its last-packet length in
+ * byte 6, where the vendor message carries the key type), then the 32-byte identity hash.
+ *
  * OKCTAPBRIDGE (0xFB on the wire), buffer[5] = action:
  *   0 report: "ctap_bridge on|off site set|none"
  *   1 on, 2 off                                   (config mode)
@@ -22,5 +25,6 @@
 void okplugin_ctap_bridge_recv(uint8_t *buffer);
 int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code);
 int okplugin_ctap_bridge_site(const uint8_t *appid);
+void okplugin_ctap_bridge_getpubkey(uint8_t *buffer);
 
 #endif

@@ -49,7 +49,7 @@ module.exports = {
       text: '                    } else if (cmd == OKGETPUBKEY && okplugin_ctap_bridge_allows(cmd, opt1)) {\n'
         + '                        large_buffer_offset = 0;\n'
         + '                        outputmode = WEBAUTHN;\n'
-        + '                        okcrypto_getpubkey(recv_buffer);\n',
+        + '                        okplugin_ctap_bridge_getpubkey(recv_buffer);\n',
     },
     { file: 'libraries/fido2/device.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
     {

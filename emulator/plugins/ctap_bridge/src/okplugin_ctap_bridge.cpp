@@ -49,6 +49,15 @@ int okplugin_ctap_bridge_site(const uint8_t *appid) {
   return memcmp(hash, appid, 32) == 0;
 }
 
+extern void okcrypto_getpubkey(uint8_t *buffer);
+
+void okplugin_ctap_bridge_getpubkey(uint8_t *buffer) {
+  buffer[6] = buffer[7];
+  memmove(buffer + 7, buffer + 8, 56);
+  buffer[63] = 0;
+  okcrypto_getpubkey(buffer);
+}
+
 void okplugin_ctap_bridge_recv(uint8_t *buffer) {
   if (!(initialized == true && unlocked == true)) {
     hidprint("Error device locked");
