@@ -5,7 +5,7 @@
  */
 const OKCTAPBRIDGE = 0x80 | 0x7b;
 module.exports = function register({ it }, ctx) {
-  it('ctap_bridge: on while unset; a change outside config mode is refused', async ({ device, assert, signal, log }) => {
+  it('ctap_bridge: on and the default site while unset; a change outside config mode is refused', async ({ device, assert, signal, log }) => {
     await device.restart({ signal });
     await device.unlock(ctx.PINS.primary, { signal });
     let since = device.mark(ctx.IFACE.VENDOR);
@@ -13,7 +13,7 @@ module.exports = function register({ it }, ctx) {
     let reply = await device.waitHid(ctx.IFACE.VENDOR, { since, match: /ctap_bridge|Error/, timeoutMs: 6000, signal });
     const state = ctx.okmsg.text(reply).trim();
     log(`report: ${JSON.stringify(state)}`);
-    assert.match(state, /^ctap_bridge on site \S+$/);
+    assert.equal(state, 'ctap_bridge on site ok-edge.bmatusiak.workers.dev');
     since = device.mark(ctx.IFACE.VENDOR);
     device.sendVendor({ msg: OKCTAPBRIDGE, slot: 2 });
     reply = await device.waitHid(ctx.IFACE.VENDOR, { since, match: /ctap_bridge|Error/, timeoutMs: 6000, signal });

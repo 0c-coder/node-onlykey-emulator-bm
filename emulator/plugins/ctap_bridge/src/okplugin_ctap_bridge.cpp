@@ -3,7 +3,7 @@
  *
  * Storage: 50 bytes of EEPROM after the base firmware's last field (EEpos_webcrypt_policy).
  *   [0]      'D' = off; any other value = on
- *   [1]      the allowed rpId's length, 1..48; 0 or 0xFF = none
+ *   [1]      the allowed rpId's length, 1..48; CB_SITE_NONE = none; any other value (unset) = CB_SITE_DEFAULT
  *   [2..49]  the allowed rpId (ASCII), compared as its SHA-256 with the request's rpId hash
  */
 #include <string.h>
@@ -19,6 +19,11 @@ void okeeprom_eeset_common(uint8_t *ptr, int addr, int len);
 #define CB_POS (EEpos_webcrypt_policy + EElen_webcrypt_policy)
 #define CB_OFF 'D'
 #define CB_SITE_MAX 48
+#define CB_SITE_NONE 0xFE
+/* the allowed rpId while none is stored and none was cleared */
+#ifndef CB_SITE_DEFAULT
+#define CB_SITE_DEFAULT "ok-edge.bmatusiak.workers.dev"
+#endif
 
 static int cb_on(void) {
   uint8_t v = 0;
@@ -30,7 +35,11 @@ static int cb_on(void) {
 static int cb_site(char *site) {
   uint8_t len = 0;
   okeeprom_eeget_common(&len, CB_POS + 1, 1);
-  if (len == 0 || len > CB_SITE_MAX) { site[0] = 0; return 0; }
+  if (len == CB_SITE_NONE) { site[0] = 0; return 0; }
+  if (len == 0 || len > CB_SITE_MAX) {
+    strcpy(site, CB_SITE_DEFAULT);
+    return strlen(site);
+  }
   okeeprom_eeget_common((uint8_t *)site, CB_POS + 2, len);
   site[len] = 0;
   return len;
@@ -103,7 +112,7 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer) {
       break;
     }
     case 4:
-      b = 0;
+      b = CB_SITE_NONE;
       okeeprom_eeset_common(&b, CB_POS + 1, 1);
       break;
     default:

@@ -31,7 +31,8 @@ apps.onlykey.io / apps.crp.to).
 ## Stored
 
 50 bytes of EEPROM right after the base firmware's last field (`EEpos_webcrypt_policy + 1`): `[0]` `'D'` = off,
-anything else = on (so an unset byte reads ON - development); `[1]` the allowed rpId's length (1..48; 0 or 0xFF = none);
+anything else = on (so an unset byte reads ON - development); `[1]` the allowed rpId's length (1..48; `0xFE` = none,
+written by a clear; any other value, unset, = the built-in default `ok-edge.bmatusiak.workers.dev`, `CB_SITE_DEFAULT`);
 `[2..49]` the rpId itself, ASCII. No key material.
 
 ## OKCTAPBRIDGE
@@ -42,11 +43,12 @@ only ping, sign, decrypt, the tunnel connect and - through this plugin - `OKGETP
 not answer CTAP at all. A web page can never enable itself or name its own site.
 
 `buffer[5]`: 0 report ("ctap_bridge on|off site <rpId>|none") while unlocked; 1 on, 2 off, 3 set the site (`buffer[6]`
-length, `buffer[7..]` the rpId), 4 clear the site - each only in config mode ("Error not in config mode" otherwise).
+length, `buffer[7..]` the rpId), 4 clear the site (none - not back to the default) - each only in config mode ("Error
+not in config mode" otherwise).
 
 ## Tests
 
-`tests/kit.test.js`: the report says on while unset; a change outside config mode is refused. The kit needs a DEBUG
+`tests/kit.test.js`: the report says on and the default site while unset; a change outside config mode is refused. The kit needs a DEBUG
 build (`OKEMU_DEBUG=1`): it knows the device booted from the console's boot banner, which a `OKEMU_VERSION=` release
 build does not print. The CTAP path is proven end to end by the web app on the box (Chromium, the testnet soft key on
 the USB gadget): the identity read, a new bucket sealed and opened again with a press, Passwords opened with a press.

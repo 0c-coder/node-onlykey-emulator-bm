@@ -3,7 +3,8 @@
  *
  * - the agent derivation codes (public key 132/232, sign and decrypt 201-204 / 221-224) pass the
  *   tunnel's stored-key gate, and OKGETPUBKEY is dispatched for them;
- * - one extra allowed site: an rpId (up to 48 characters), set in config mode, readable by the report;
+ * - one extra allowed site: an rpId (up to 48 characters), set in config mode, readable by the report; while none is
+ *   stored, CB_SITE_DEFAULT (okplugin_ctap_bridge.cpp); cleared, none;
  * - all of it behind one byte, read as ON while unset; turned off or on in config mode.
  *
  * OKGETPUBKEY over the tunnel: the first payload byte is the key type (the tunnel puts its last-packet length in
@@ -13,7 +14,7 @@
  *   0 report: "ctap_bridge on|off site <rpId>|none"  (while unlocked)
  *   1 on, 2 off                                   (config mode)
  *   3 site: buffer[6] = length, buffer[7..] = rpId  (config mode)
- *   4 clear the site                              (config mode)
+ *   4 clear the site: no extra site, not the default (config mode)
  */
 #ifndef OKPLUGIN_CTAP_BRIDGE_H
 #define OKPLUGIN_CTAP_BRIDGE_H
