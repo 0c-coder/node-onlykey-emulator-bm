@@ -36,6 +36,11 @@ anything else = on (so an unset byte reads ON - development); `[1]` the allowed 
 
 ## OKCTAPBRIDGE
 
+**Never over CTAP.** The setting (on/off, the site) can be changed only on the vendor interface, and only in config
+mode: `OKCTAPBRIDGE` is a case in okcore.cpp's vendor switch alone, the WebAuthn extension (fido2/solo.cpp) forwards
+only ping, sign, decrypt, the tunnel connect and - through this plugin - `OKGETPUBKEY`, and in config mode the key does
+not answer CTAP at all. A web page can never enable itself or name its own site.
+
 `buffer[5]`: 0 report ("ctap_bridge on|off site <rpId>|none") while unlocked; 1 on, 2 off, 3 set the site (`buffer[6]`
 length, `buffer[7..]` the rpId), 4 clear the site - each only in config mode ("Error not in config mode" otherwise).
 

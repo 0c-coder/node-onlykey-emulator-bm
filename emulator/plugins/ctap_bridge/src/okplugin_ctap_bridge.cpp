@@ -7,10 +7,8 @@
  *   [2..49]  the allowed rpId (ASCII), compared as its SHA-256 with the request's rpId hash
  */
 #include <string.h>
+#include "onlykey.h"
 #include "okplugin_ctap_bridge.h"
-#include "okcore.h"
-#include "okcrypto.h"
-#include "okeeprom.h"
 #include "sha256.h"
 
 extern "C" {
