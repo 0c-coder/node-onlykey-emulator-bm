@@ -54,3 +54,7 @@ okeeprom_eeset_rsakey(&no_key, (int)buffer[5]);
 Before the fix the wiped slot publishes another modulus (no key; its small prime factors show it is not RSA). After the
 fix it answers "Error no RSA Private Key set in this slot". Recorded at 8d28305, before and after, on emulator builds;
 the code it touches is the same at `fe9e293`.
+
+**In the kit:** onlykey-testing `01-protocol/19-rsa-keys.test.js`, "OKWIPEPRIV clears an RSA slot": with the fix (an
+emulator staging 0013, or a hard key flashed with it and `OKT_FIRMWARE_FIXES=0013`) the wiped slot must read as empty;
+without it the stale type is pinned as the shipped behaviour.
