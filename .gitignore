@@ -54,5 +54,6 @@ npm-debug.log*
 .DS_Store
 
 
-# a patch bundled for the maintainer is sent, not kept: the .patch beside it is the source
+# a patch bundled for the maintainer (its tar and to-send.md cover note) is sent, not kept: the .patch beside it is the source
 emulator/scripts/versions/patches-*/**/*.tar.gz
+emulator/scripts/versions/patches-*/**/to-send.md
