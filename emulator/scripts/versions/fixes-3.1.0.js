@@ -7,7 +7,11 @@
  * is never the base.
  *
  *   0012  okcore: the 20 s user timer stops when a request is decided, so it cannot answer "Timeout" for the next one
- *         (was the emulator plugin fix_usertimeout until 2026-10-26)
+ *         (was the emulator plugin fix_usertimeout until 2026-10-26; sent to the maintainer 2026-10-26)
+ *   0013  okcore: wiping an RSA slot clears its key type, so the wiped slot reads as empty
+ *
+ * HELD (a HOLD file in its folder: kept, not staged, not sent):
+ *   0014  okcrypto: clamp X25519 scalars (RFC 7748) - changes existing keys, needs the maintainer's migration plan
  *
  * GONE WITH THE RE-PIN to the maintainer's ok-80e3ba0-fe9e293 (2026-10-26) - upstream carries them, so they are no
  * longer staged; their patches and READMEs stay in this repository's history:
@@ -24,7 +28,7 @@
  * build.json records which, as `fixes`.
  */
 module.exports = {
-  names: ["0012"],
+  names: ["0012", "0013"],
   patches: [
     /* 0012-okcore-stop-the-20-s-user-timer-when-a-request-is-decided.patch */
     {
@@ -32,6 +36,14 @@ module.exports = {
       edits: [
         ["// Runs the operation staged by done_process_packets(). CRYPTO_AUTH must\n// already be 4.\nvoid okcore_run_pending_op() {\n    derived_key_challenge_mode = 0;\n    stored_key_challenge_mode = 0;\n    if (packet_buffer_details[0] == OKSIGN) {\n",
          "// Runs the operation staged by done_process_packets(). CRYPTO_AUTH must\n// already be 4.\nvoid okcore_run_pending_op() {\n    cancelfadeoffafter20(); /* the request is decided: its 20 s wait for the user is over */\n    derived_key_challenge_mode = 0;\n    stored_key_challenge_mode = 0;\n    if (packet_buffer_details[0] == OKSIGN) {\n"],
+      ],
+    },
+    /* 0013-okcore-wiping-an-RSA-slot-clears-its-key-type.patch */
+    {
+      file: "libraries/onlykey/okcore.cpp",
+      edits: [
+        ["        flash_modify(buffer[5], temp, buffer, MAX_RSA_KEY_SIZE, 1);\n        //Write buffer to flash\n        okcore_flashset_common(tptr, (unsigned long *)adr, 2048);\n        hidprint(\"Successfully wiped RSA Private Key\");\n        blink(2);\n        return;\n",
+         "        flash_modify(buffer[5], temp, buffer, MAX_RSA_KEY_SIZE, 1);\n        //Write buffer to flash\n        okcore_flashset_common(tptr, (unsigned long *)adr, 2048);\n        /* The key is gone, so clear its type as well, as an ECC wipe does\n         * (ecc_priv_flash stores the zeroed type byte). Left set, the slot\n         * still reads as an RSA key: okcore_flashget_RSA decrypts the zeroed\n         * flash into keystream and rsa_getpub answers its product. */\n        uint8_t no_key = 0;\n        okeeprom_eeset_rsakey(&no_key, (int)buffer[5]);\n        hidprint(\"Successfully wiped RSA Private Key\");\n        blink(2);\n        return;\n"],
       ],
     },
   ],

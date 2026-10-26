@@ -1,0 +1,61 @@
+From f62c5885b48d5f7cff175f827cebaa9e675b136e Mon Sep 17 00:00:00 2001
+From: bmatusiak <bmatusiak@gmail.com>
+Date: Mon, 26 Oct 2026 19:25:27 -0400
+Subject: [PATCH] okcrypto: clamp X25519 scalars (RFC 7748)
+
+The X25519 public key (okcrypto_compute_pubkey) and shared secret
+(okcrypto_shared_secret) passed the stored 32-byte scalar straight to
+Curve25519::eval(), which does not clamp; RFC 7748 X25519 always clamps
+the scalar first (clear the 3 low bits, clear the top bit, set bit 254).
+Keys worked and stayed self-consistent, but were not standard X25519 and
+lacked what clamping protects against. Both paths now clamp a copy
+(wiped after use); the stored key is unchanged.
+
+Note: this changes the public key of about 15 in 16 existing X25519 keys
+(those whose stored scalar was not already in clamped form), so data
+encrypted to such a key - a cv25519 GPG subkey, an agent-derived X25519
+key - no longer decrypts with the new firmware. It needs a migration plan
+(for example clamp only new keys, or a release note to re-export keys and
+decrypt old data first).
+---
+ onlykey/okcrypto.cpp | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/onlykey/okcrypto.cpp b/onlykey/okcrypto.cpp
+index a2dc902..0e62ed3 100644
+--- a/onlykey/okcrypto.cpp
++++ b/onlykey/okcrypto.cpp
+@@ -1155,7 +1155,14 @@ int okcrypto_shared_secret(uint8_t *pub, uint8_t *secret) {
+                 return 1;
+         case KEYTYPE_CURVE25519: {
+             uint8_t nonzero = 0;
+-            Curve25519::eval(secret, ecc_private_key, pub);
++            // Clamp a copy of the scalar (RFC 7748); Curve25519::eval() does not.
++            // ecc_private_key is already in eval() order (okcrypto_compute_pubkey swapped it).
++            uint8_t s[32];
++            memcpy(s, ecc_private_key, 32);
++            s[0] &= 0xF8;
++            s[31] = (s[31] & 0x7F) | 0x40;
++            Curve25519::eval(secret, s, pub);
++            memset(s, 0, sizeof(s));
+             for (int i = 0; i < 32; i++) nonzero |= secret[i];
+             return nonzero ? 0 : 1;
+         }
+@@ -2425,7 +2432,13 @@ void okcrypto_compute_pubkey() {
+         uECC_compute_public_key(ecc_private_key, ecc_public_key, curve);
+     } else if (type == KEYTYPE_CURVE25519) {
+         swap_buffer(0, 31, ecc_private_key);
+-        Curve25519::eval(ecc_public_key, ecc_private_key, 0);
++        // Clamp a copy of the scalar (RFC 7748), in the byte order eval() reads.
++        uint8_t s[32];
++        memcpy(s, ecc_private_key, 32);
++        s[0] &= 0xF8;
++        s[31] = (s[31] & 0x7F) | 0x40;
++        Curve25519::eval(ecc_public_key, s, 0);
++        memset(s, 0, sizeof(s));
+     }
+ #ifdef DEBUG
+     Serial.println("Computed Public");
+-- 
+2.55.0
+

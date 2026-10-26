@@ -59,4 +59,6 @@ A fix to the BASE firmware is not a plugin: it is a maintainer patch (owner, 202
 - `plugins/edge/tools/build-hardkey.sh` `git am`s the same patch files for a developer hard key;
 - the onlykey-testing kit reproduces the issue (it fails without the patch and passes with it), as a test of its own.
 
+A patch that changes existing users' keys or data is kept with a `HOLD` file in its folder (the reason inside): `gen-fixes.js` and `build-hardkey.sh` skip it until it is measured and decided. Sending one: a tar holding only the patch file, named as the patch, beside it (git-ignored).
+
 When upstream takes a fix, the re-pin removes its folder and `gen-fixes.js` drops it (fix_usertimeout was a plugin until it became patch 0012, 2026-10-26).

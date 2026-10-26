@@ -65,7 +65,13 @@ function parsePatch(text, repoDir) {
   return files;
 }
 
-const fixes = fs.readdirSync(dir).filter((d) => /^\d{4}-/.test(d)).sort().map((d) => {
+/*
+ * HELD: a folder holding a HOLD file (its reason inside) is a patch we keep but do not stage - one that changes
+ * existing users' keys or data waits for a decision and a measurement. build-hardkey.sh skips it the same way.
+ */
+const all = fs.readdirSync(dir).filter((d) => /^\d{4}-/.test(d)).sort();
+const held = all.filter((d) => fs.existsSync(path.join(dir, d, 'HOLD')));
+const fixes = all.filter((d) => !held.includes(d)).map((d) => {
   const repo = REPOS[d.split('-')[1]];
   if (!repo) throw new Error(`${d}: the folder name says which repository (${Object.keys(REPOS).join(' | ')}) after the number`);
   const patches = fs.readdirSync(path.join(dir, d)).filter((f) => f.endsWith('.patch')).sort();
@@ -116,3 +122,4 @@ if (mode === '--check') {
   fs.writeFileSync(out, next);
   console.log(`fixes-${version}.js written from patches-${version}/ (${fixes.map((f) => f.name).join(', ') || 'none'})`);
 }
+if (held.length) console.log(`held, not staged: ${held.join(', ')}`);

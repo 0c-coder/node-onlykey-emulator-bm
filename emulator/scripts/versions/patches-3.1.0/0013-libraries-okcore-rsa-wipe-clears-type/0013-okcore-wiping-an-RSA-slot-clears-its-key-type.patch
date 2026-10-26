@@ -1,0 +1,40 @@
+From 9100f1c9bfd87873a91439ab75085d4cc75b30af Mon Sep 17 00:00:00 2001
+From: bmatusiak <bmatusiak@gmail.com>
+Date: Mon, 26 Oct 2026 19:25:26 -0400
+Subject: [PATCH] okcore: wiping an RSA slot clears its key type
+
+OKWIPEPRIV for RSA1-RSA4 zeroed the slot's flash and answered
+"Successfully wiped RSA Private Key", but left the slot's key type in
+EEPROM. The next read still found a type, so okcore_flashget_RSA() ran
+the AES-GCM decryption over the zeroed flash (no tag check: the result is
+the slot's keystream), took that as p and q, and published their product
+as the slot's public key. A wiped RSA slot never read as empty: it
+answered OKGETPUBKEY with a modulus of the old key's size that is no key.
+
+The ECC wipe already clears its type (wipe_private() zeroes the type byte
+and ecc_priv_flash() stores it). The RSA wipe now does the same, so a
+wiped RSA slot answers "Error no RSA Private Key set in this slot".
+---
+ onlykey/okcore.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/onlykey/okcore.cpp b/onlykey/okcore.cpp
+index 0620dbc..db74456 100644
+--- a/onlykey/okcore.cpp
++++ b/onlykey/okcore.cpp
+@@ -5052,6 +5052,12 @@ void rsa_priv_flash(uint8_t *buffer, bool wipe) {
+         flash_modify(buffer[5], temp, buffer, MAX_RSA_KEY_SIZE, 1);
+         //Write buffer to flash
+         okcore_flashset_common(tptr, (unsigned long *)adr, 2048);
++        /* The key is gone, so clear its type as well, as an ECC wipe does
++         * (ecc_priv_flash stores the zeroed type byte). Left set, the slot
++         * still reads as an RSA key: okcore_flashget_RSA decrypts the zeroed
++         * flash into keystream and rsa_getpub answers its product. */
++        uint8_t no_key = 0;
++        okeeprom_eeset_rsakey(&no_key, (int)buffer[5]);
+         hidprint("Successfully wiped RSA Private Key");
+         blink(2);
+         return;
+-- 
+2.55.0
+

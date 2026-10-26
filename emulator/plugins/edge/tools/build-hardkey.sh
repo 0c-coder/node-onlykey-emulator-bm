@@ -53,6 +53,7 @@ git -C "$OUT/libraries" checkout -q -B edge/3.1.0 "$LIB_PIN"
 fixes=""
 for p in "$PATCHES"/*/*.patch; do
   [ -f "$p" ] || continue
+  [ -f "$(dirname "$p")/HOLD" ] && { say "   held, not applied: $(basename "$(dirname "$p")")"; continue; }
   git -C "$OUT/libraries" -c user.name=build-hardkey -c user.email=build@localhost am -q "$p" \
     || { git -C "$OUT/libraries" am --abort; echo "   $(basename "$p") does not apply to $LIB_PIN - not building"; exit 1; }
   fixes="$fixes $(basename "$(dirname "$p")" | cut -c1-4)"
