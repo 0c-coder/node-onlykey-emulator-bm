@@ -1101,7 +1101,7 @@ void okemu_random_bytes(uint8_t *out, size_t len) {
 /*
  * okemu_confirm_state - what the firmware is waiting on, packed (ok_hal.h).
  *
- * The four globals are the firmware's own, with C++ linkage, read in place:
+ * The four globals are the firmware's own, read in place:
  *   CRYPTO_AUTH              1..3 while a request waits (1, 2 = code digits so far, 3 = the last
  *                            digit or a single press), 0 when nothing waits
  *   packet_buffer_details    [0] the opcode waiting, [1] its slot
@@ -1112,17 +1112,28 @@ void okemu_random_bytes(uint8_t *out, size_t len) {
  * weak on GCC/Clang ELF, and on Windows a /alternatename to a stand-in that is used only when the
  * firmware does not define the symbol (the same mechanism as Profile_Offset above). A missing
  * CRYPTO_AUTH, isfade or packet_buffer_details answers -1; a missing user_input_mode reads as 7.
+ *
+ * LINKAGE MATTERS ON WINDOWS ONLY. CRYPTO_AUTH (okcrypto.h, every release from 2.1.0) and
+ * user_input_mode (okcore.h) are declared inside the firmware's extern "C" blocks, so MSVC names
+ * them plainly (`CRYPTO_AUTH`); isfade and packet_buffer_details have C++ linkage and MSVC's
+ * mangled names (`?isfade@@3EA`). ELF does not mangle variables, so there both spellings are one
+ * symbol. Declared with C++ linkage here, CRYPTO_AUTH resolved to its stand-in on every Windows
+ * build: a waiting press always read 0, so nothing on the desktop showed a press sheet (the
+ * Windows desktop's bucket key, 2026-10-25). user_input_mode's stand-in holds 7 itself, so even a
+ * folded address comparison reads "not given" on a firmware without it.
  */
 #if defined(_WIN32)
 uint8_t okemu_absent_byte = 0;
 uint8_t okemu_absent_details[5] = {0};
-extern uint8_t CRYPTO_AUTH;
+extern "C" uint8_t okemu_absent_auth = 0;
+extern "C" uint8_t okemu_absent_mode = 7;
+extern "C" uint8_t CRYPTO_AUTH;
+extern "C" uint8_t user_input_mode;
 extern uint8_t isfade;
 extern uint8_t packet_buffer_details[5];
-extern uint8_t user_input_mode;
-#pragma comment(linker, "/alternatename:?CRYPTO_AUTH@@3EA=?okemu_absent_byte@@3EA")
+#pragma comment(linker, "/alternatename:CRYPTO_AUTH=okemu_absent_auth")
+#pragma comment(linker, "/alternatename:user_input_mode=okemu_absent_mode")
 #pragma comment(linker, "/alternatename:?isfade@@3EA=?okemu_absent_byte@@3EA")
-#pragma comment(linker, "/alternatename:?user_input_mode@@3EA=?okemu_absent_byte@@3EA")
 #pragma comment(linker, "/alternatename:?packet_buffer_details@@3PAEA=?okemu_absent_details@@3PAEA")
 #define OKEMU_HAS(sym, standin) ((const void *)&(sym) != (const void *)&(standin))
 #else
@@ -1134,11 +1145,11 @@ extern uint8_t user_input_mode __attribute__((weak));
 #endif
 
 extern "C" int okemu_confirm_state(void) {
-  if (!OKEMU_HAS(CRYPTO_AUTH, okemu_absent_byte) || !OKEMU_HAS(isfade, okemu_absent_byte)
+  if (!OKEMU_HAS(CRYPTO_AUTH, okemu_absent_auth) || !OKEMU_HAS(isfade, okemu_absent_byte)
       || !OKEMU_HAS(packet_buffer_details, okemu_absent_details)) {
     return -1;
   }
-  const uint32_t mode = OKEMU_HAS(user_input_mode, okemu_absent_byte) ? (user_input_mode & 0x7u) : 7u;
+  const uint32_t mode = OKEMU_HAS(user_input_mode, okemu_absent_mode) ? (user_input_mode & 0x7u) : 7u;
   return (int)((uint32_t)CRYPTO_AUTH | ((uint32_t)packet_buffer_details[0] << 8)
                 | ((uint32_t)packet_buffer_details[1] << 16) | (mode << 24) | ((uint32_t)(isfade ? 1 : 0) << 27));
 }
