@@ -3,8 +3,9 @@
 **What it is for:** the web app reaches the key only through WebAuthn (browsers block the OnlyKey from WebHID). The base
 firmware forwards four vendor commands over that tunnel - ping, sign, decrypt, the tunnel connect - and, at the default
 webcrypt level, sign/decrypt only for slot 128. The bucket identity and the bucket key are agent derivations, so a
-browser could not learn which identity the key is. This plugin fills that gap for development, testing and demo. It is
-a soft-key plugin, never built into hard keys, and is removed before release (production stays locked to
+browser could not learn which identity the key is. This plugin fills that gap for development, testing and demo: the
+soft key, and DEVELOPER hard keys (unsigned firmware, `edge/tools/build-hardkey.sh` with `PLUGINS=...,ctap_bridge`;
+the web app offers that hex on its login page). It is removed before release (production stays locked to
 apps.onlykey.io / apps.crp.to).
 
 ## Hooks
