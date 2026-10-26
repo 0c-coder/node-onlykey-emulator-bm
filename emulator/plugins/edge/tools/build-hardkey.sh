@@ -54,6 +54,9 @@ ln -s "$OUT/libraries" "$stage/libraries"
 ln -s "$OUT/OnlyKey-Firmware/OnlyKey" "$stage/sketch"
 node -e '
   const [emu, dir, stage, names, fw, lib] = process.argv.slice(1);
+  /* a soft-key-only plugin (plugin.js softKeyOnly: config, key_chain) is never built into a hard key */
+  const soft = names.split(",").filter((n) => require(require("path").join(dir, n, "plugin.js")).softKeyOnly);
+  if (soft.length) { console.error(`   soft-key-only, not for a hard key: ${soft.join(", ")} - not building`); process.exit(1); }
   const fp = require(require.resolve("node-onlykey-lib/cli/firmware-plugins", { paths: [emu] }));
   const plugins = fp.load(names.split(","), { dir, release: { version: "v3.1.0", pins: { "OnlyKey-Firmware": fw, libraries: lib } } });
   for (const p of fp.apply(plugins, stage)) console.log(`   ${p.name}: ${p.hooks} hooks, ${p.files} files${p.backup ? ", backup section" : ""}`);

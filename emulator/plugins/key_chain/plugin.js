@@ -39,6 +39,8 @@ const INC = '#include "plugins/key_chain/okplugin_key_chain.h"\n';
 module.exports = {
   name: 'key_chain',
   minBase: '3.1.0',
+  /* never in a hard-key image: it reports to the app that embeds the soft key (AUDIT.md) - tools/build-hardkey.sh refuses it */
+  softKeyOnly: true,
   notes: 'reports each derived public key the soft key answers (transport, code, keytype, label hash, rpId hash, public key) to the app for its Key Chain list; never private data; not a use',
   backup: false,
   /* keeps nothing in flash or EEPROM: the soft key's storage slot is not named after it (firmware-plugins slotPlugins) */

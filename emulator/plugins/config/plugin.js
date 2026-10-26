@@ -21,6 +21,8 @@
 module.exports = {
   name: 'config',
   minBase: '3.1.0',
+  /* never in a hard-key image: a hard key is not emulated, so the app is not in the middle (AUDIT.md "Not on a hard key") - tools/build-hardkey.sh refuses it */
+  softKeyOnly: true,
   notes: 'OKGETCONFIG 0xF9 prints the settings as INI; OKSETCONFIG 0xFA imports one (config mode, DEBUG builds only; soft key only)',
   backup: false,
   hooks: [
