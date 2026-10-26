@@ -4,7 +4,7 @@
 **For:** trustcrypto/libraries `master` @ `fe9e293` (3.1.0 with the security review fixes; the pins ok-80e3ba0-fe9e293)
 **Size:** 1 file, +1: `onlykey/okcore.cpp` (the first line of `okcore_run_pending_op()`).
 **Order:** applies to `fe9e293` alone (`git am` clean). Firmware only - no web app change.
-**Status:** see section 3. Brad decides whether it is sent.
+**Status:** SENT to the maintainer 2026-10-26 (by Brad: the patch alone, in `0012-okcore-stop-the-20-s-user-timer-when-a-request-is-decided.tar.gz`, for ok-80e3ba0-fe9e293-test). Staged on our builds until a pin carries it; then the re-pin removes this folder. Tests: section 3.
 
 ---
 
