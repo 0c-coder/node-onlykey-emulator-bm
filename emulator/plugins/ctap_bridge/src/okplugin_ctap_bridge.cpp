@@ -1,13 +1,15 @@
 /*
  * ctap_bridge: see okplugin_ctap_bridge.h.
  *
- * Storage: 33 bytes of EEPROM after the base firmware's last field (EEpos_webcrypt_policy).
- *   [0]     'D' = off; any other value = on
- *   [1..32] SHA-256 of the allowed rpId; all 0x00 or all 0xFF = none
+ * Storage: 50 bytes of EEPROM after the base firmware's last field (EEpos_webcrypt_policy).
+ *   [0]      'D' = off; any other value = on
+ *   [1]      the allowed rpId's length, 1..48; 0 or 0xFF = none
+ *   [2..49]  the allowed rpId (ASCII), compared as its SHA-256 with the request's rpId hash
  */
 #include <string.h>
 #include "okplugin_ctap_bridge.h"
 #include "okcore.h"
+#include "okcrypto.h"
 #include "okeeprom.h"
 #include "sha256.h"
 
@@ -15,13 +17,10 @@ extern "C" {
 void okeeprom_eeget_common(uint8_t *ptr, int addr, int len);
 void okeeprom_eeset_common(uint8_t *ptr, int addr, int len);
 }
-extern bool unlocked;
-extern bool initialized;
-extern bool configmode;
-extern void hidprint(const char *chars);
 
 #define CB_POS (EEpos_webcrypt_policy + EElen_webcrypt_policy)
 #define CB_OFF 'D'
+#define CB_SITE_MAX 48
 
 static int cb_on(void) {
   uint8_t v = 0;
@@ -29,11 +28,14 @@ static int cb_on(void) {
   return v != CB_OFF;
 }
 
-static int cb_site(uint8_t *hash) {
-  okeeprom_eeget_common(hash, CB_POS + 1, 32);
-  uint8_t all0 = 0, all1 = 0xFF;
-  for (int i = 0; i < 32; i++) { all0 |= hash[i]; all1 &= hash[i]; }
-  return all0 != 0 && all1 != 0xFF;
+/* the allowed rpId into site (NUL-terminated); its length, 0 when none */
+static int cb_site(char *site) {
+  uint8_t len = 0;
+  okeeprom_eeget_common(&len, CB_POS + 1, 1);
+  if (len == 0 || len > CB_SITE_MAX) { site[0] = 0; return 0; }
+  okeeprom_eeget_common((uint8_t *)site, CB_POS + 2, len);
+  site[len] = 0;
+  return len;
 }
 
 int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code) {
@@ -44,12 +46,16 @@ int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code) {
 }
 
 int okplugin_ctap_bridge_site(const uint8_t *appid) {
+  char site[CB_SITE_MAX + 1];
+  int len;
+  if (!appid || !cb_on() || !(len = cb_site(site))) return 0;
   uint8_t hash[32];
-  if (!appid || !cb_on() || !cb_site(hash)) return 0;
+  SHA256_CTX ctx;
+  sha256_init(&ctx);
+  sha256_update(&ctx, (const uint8_t *)site, (size_t)len);
+  sha256_final(&ctx, hash);
   return memcmp(hash, appid, 32) == 0;
 }
-
-extern void okcrypto_getpubkey(uint8_t *buffer);
 
 void okplugin_ctap_bridge_getpubkey(uint8_t *buffer) {
   buffer[6] = buffer[7];
@@ -69,7 +75,6 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer) {
     return;
   }
   uint8_t b;
-  uint8_t hash[32];
   switch (action) {
     case 0:
       break;
@@ -80,25 +85,25 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer) {
       break;
     case 3: {
       uint8_t len = buffer[6];
-      if (len == 0 || len > 57) {
+      if (len == 0 || len > CB_SITE_MAX) {
         hidprint("Error rpId length");
         return;
       }
-      SHA256_CTX ctx;
-      sha256_init(&ctx);
-      sha256_update(&ctx, buffer + 7, len);
-      sha256_final(&ctx, hash);
-      okeeprom_eeset_common(hash, CB_POS + 1, 32);
+      okeeprom_eeset_common(buffer + 7, CB_POS + 2, len);
+      okeeprom_eeset_common(&len, CB_POS + 1, 1);
       break;
     }
     case 4:
-      memset(hash, 0xFF, sizeof(hash));
-      okeeprom_eeset_common(hash, CB_POS + 1, 32);
+      b = 0;
+      okeeprom_eeset_common(&b, CB_POS + 1, 1);
       break;
     default:
       hidprint("Error unknown ctap_bridge action");
       return;
   }
-  hidprint(cb_on() ? (cb_site(hash) ? "ctap_bridge on site set" : "ctap_bridge on site none")
-                   : (cb_site(hash) ? "ctap_bridge off site set" : "ctap_bridge off site none"));
+  char line[24 + CB_SITE_MAX] = "ctap_bridge ";
+  char site[CB_SITE_MAX + 1];
+  strcat(line, cb_on() ? "on site " : "off site ");
+  strcat(line, cb_site(site) ? site : "none");
+  hidprint(line);
 }

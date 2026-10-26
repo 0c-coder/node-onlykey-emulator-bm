@@ -13,7 +13,7 @@ module.exports = function register({ it }, ctx) {
     let reply = await device.waitHid(ctx.IFACE.VENDOR, { since, match: /ctap_bridge|Error/, timeoutMs: 6000, signal });
     const state = ctx.okmsg.text(reply).trim();
     log(`report: ${JSON.stringify(state)}`);
-    assert.match(state, /^ctap_bridge on site (none|set)$/);
+    assert.match(state, /^ctap_bridge on site \S+$/);
     since = device.mark(ctx.IFACE.VENDOR);
     device.sendVendor({ msg: OKCTAPBRIDGE, slot: 2 });
     reply = await device.waitHid(ctx.IFACE.VENDOR, { since, match: /ctap_bridge|Error/, timeoutMs: 6000, signal });
