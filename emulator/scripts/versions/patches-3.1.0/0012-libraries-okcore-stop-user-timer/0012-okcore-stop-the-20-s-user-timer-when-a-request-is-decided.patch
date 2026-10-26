@@ -1,0 +1,37 @@
+From 4861aa06d98a4b1fee6aeee15c4dba6eb2dfd2a3 Mon Sep 17 00:00:00 2001
+From: bmatusiak <bmatusiak@gmail.com>
+Date: Mon, 26 Oct 2026 19:02:33 -0400
+Subject: [PATCH] okcore: stop the 20 s user timer when a request is decided
+
+okcore_prime_user_confirmation() starts the 20 s user timer
+(fadeoffafter20() -> Usertimeout) every time a request is primed, and
+nothing stopped it when the request was decided. It ran out 20 s after
+the last prime whatever was happening then: if the next OKSIGN/OKDECRYPT
+was arriving (its first packet had set pending_operation, its own prime
+had not run yet), the old timer answered "Timeout occured while waiting
+for confirmation on OnlyKey" for the new request and wiped its packet
+details - the host read that as a refusal.
+
+okcore_run_pending_op() runs once a primed request is decided (after the
+press or challenge, or at once when no press is needed), so it cancels
+the timer there, as the FIDO2 code already does with the same call. A
+request that is never decided still times out after 20 s as before.
+---
+ onlykey/okcore.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/onlykey/okcore.cpp b/onlykey/okcore.cpp
+index 0620dbc..bdd17e1 100644
+--- a/onlykey/okcore.cpp
++++ b/onlykey/okcore.cpp
+@@ -5542,6 +5542,7 @@ uint8_t okcore_user_input_mode_for_slot(uint8_t slot) {
+ // Runs the operation staged by done_process_packets(). CRYPTO_AUTH must
+ // already be 4.
+ void okcore_run_pending_op() {
++    cancelfadeoffafter20(); /* the request is decided: its 20 s wait for the user is over */
+     derived_key_challenge_mode = 0;
+     stored_key_challenge_mode = 0;
+     if (packet_buffer_details[0] == OKSIGN) {
+-- 
+2.55.0
+

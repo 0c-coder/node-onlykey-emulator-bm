@@ -158,7 +158,7 @@ def okemuStage = {
          * always stages the same firmware - an environment variable is forgotten on the next
          * build. Each property is the stage.js variable of the same meaning; one already in the
          * environment is left alone.
-         *   okemuPlugins  OKEMU_PLUGINS  e.g. config,edge,key_chain,fix_usertimeout
+         *   okemuPlugins  OKEMU_PLUGINS  e.g. config,edge,key_chain
          *   okemuAppOut   OKEMU_APP_OUT  the app's folder for firmware.json + the plugins' tests
          *   okemuVersion  OKEMU_VERSION  a release recipe (scripts/versions/) instead of the tree
          *   okemuDebug    OKEMU_DEBUG    1 = the DEBUG console (off by default)

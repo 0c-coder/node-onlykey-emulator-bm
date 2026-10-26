@@ -12,7 +12,7 @@ Hard keys never get the feature plugins. A fix plugin is how a fix for every key
 Name the plugins when you stage or build. Without the variable nothing is staged, and the soft key is the base build, byte for byte (the staged digest is unchanged):
 ```
 OKEMU_PLUGINS=edge npm run rebuild                                   # Node addon, from emulator/
-OKEMU_PLUGINS=config,edge,key_chain,fix_usertimeout ./gradlew -p android assembleRelease   # Android library
+OKEMU_PLUGINS=config,edge,key_chain ./gradlew -p android assembleRelease   # Android library
 OKEMU_PLUGINS=edge node scripts/stage.js                             # stage only
 ```
 `OKEMU_PLUGINS_DIR` stages from another folder instead of this one.
@@ -50,13 +50,13 @@ A test gets the app or the kit through `ctx` (device access, `IFACE`, `okmsg` or
 | `config` | OKGETCONFIG prints the settings as INI; OKSETCONFIG imports one (config mode, DEBUG builds only) |
 | `edge` | OnlyKey Edge: budgets opened at a press, each use linked in the key's hash chain ([edge/README.md](edge/README.md)); its rules are [edge/SPEC.md](edge/SPEC.md) |
 | `key_chain` | reports each derived public key the soft key makes, and a record of each press for the press sheet |
-| `fix_usertimeout` | fix: the 20 s user timer stops when a request is decided, so it cannot answer "Timeout occured" for the next request ([AUDIT.md](fix_usertimeout/AUDIT.md)) |
 
 ## Firmware fixes
 
-A fix to the base firmware is a plugin named `fix_<topic>`, so it is contained, built only when asked for, and tested on its own before it goes upstream:
-- `plugin.js` holds the fix as hooks into the base files, as small as the fix allows;
-- `AUDIT.md` is the write-up for the firmware maintainers: the issue, why it happens, the fix, what it does not change, and the test;
-- `tests/kit.test.js` reproduces the issue on the emulator. It fails without the fix's hooks and passes with them; both runs are recorded in AUDIT.md.
+A fix to the BASE firmware is not a plugin: it is a maintainer patch (owner, 2026-10-26), so what we test is exactly what goes upstream:
+- `scripts/versions/patches-<version>/<nnnn>-<repo>-<topic>/` holds the `git am` patch made on the release pin, and its README: the issue, why it happens, the fix, what it does not change, and the test;
+- `scripts/versions/fixes-<version>.js` stages it on the soft key, generated from the patch by `scripts/versions/gen-fixes.js <version>` (`--check`, `--verify <checkout>`) - never edited by hand;
+- `plugins/edge/tools/build-hardkey.sh` `git am`s the same patch files for a developer hard key;
+- the onlykey-testing kit reproduces the issue (it fails without the patch and passes with it), as a test of its own.
 
-`src/` may hold only a note when the fix is hooks alone (the loader requires the folder).
+When upstream takes a fix, the re-pin removes its folder and `gen-fixes.js` drops it (fix_usertimeout was a plugin until it became patch 0012, 2026-10-26).

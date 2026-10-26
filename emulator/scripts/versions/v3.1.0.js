@@ -1,11 +1,14 @@
 /*
  * v3.1.0 - the release candidate.
  *
- * trustcrypto/libraries PR #33 and trustcrypto/OnlyKey-Firmware PR #183,
- * branch release-3.1.0, one squashed commit each, pinned in
- * node-onlykey-lib/versions at their heads. Not tagged yet: re-pin here and in
- * the library when the PRs move or the tag lands - the cross-check in
- * versions/index.js refuses a script whose `pins` disagree.
+ * RE-PINNED 2026-10-26 to the maintainer's pins ok-80e3ba0-fe9e293:
+ * OnlyKey-Firmware 80e3ba0 (release-3.1.0, PR #183, merged to master - the same
+ * files as 9fceea1) and libraries fe9e293 (master: release-3.1.0, PR #33,
+ * merged, then "Security fixes from the 3.1.0 review"). Our RC fixes 0008-0010
+ * are in fe9e293 as written and 0011 in the maintainer's own form, so they are
+ * no longer staged (fixes-3.1.0.js). Not tagged yet: re-pin here and in the
+ * library when the tag lands - the cross-check in versions/index.js refuses a
+ * script whose `pins` disagree.
  *
  * RE-PINNED 2026-10-21: libraries eb25290 (the 2026-09-28 squash) -> 37aa531
  * (release-3.1.0 re-squashed 2026-10-19; the library's table already pinned
@@ -38,7 +41,7 @@ const workingTree = require('./working-tree');
 const rcFixes = require('./fixes-3.1.0');
 
 /*
- * The fixes found testing the RC (0008-0010, fixes-3.1.0.js) are ON by default: the soft key then
+ * The fixes found testing the RC that upstream does not carry yet (fixes-3.1.0.js) are ON by default: the soft key then
  * runs what the developer hard key runs. OKEMU_RC_FIXES=0 stages the RC exactly as published.
  */
 const withFixes = process.env.OKEMU_RC_FIXES !== '0';
@@ -48,15 +51,15 @@ module.exports = {
   patches: withFixes ? rcFixes.patches : [],
   fixes: withFixes ? rcFixes.names : [],
   version: 'v3.1.0',
-  pins: { libraries: '37aa531', 'OnlyKey-Firmware': '9fceea1' },
+  pins: { libraries: 'fe9e293', 'OnlyKey-Firmware': '80e3ba0' },
   status: 'untried',
-  emulator: { linux: 'boots', win32: 'boots' },   /* node-onlykey-emulator's own ladder: boots = matrix stage/build/press/compat PASS on the SIGNED build. At 37aa531: linux (ZBOX x64) and win32, 2026-10-21. (Was 'boots' on both at eb25290, 2026-09-28.) */
+  emulator: { linux: 'boots', win32: 'boots' },   /* node-onlykey-emulator's own ladder: boots = matrix stage/build/press/compat PASS on the SIGNED build. At 37aa531: linux (ZBOX x64) and win32, 2026-10-21; re-pinned to fe9e293 2026-10-26, to be re-proved there. (Was 'boots' on both at eb25290, 2026-09-28.) */
   slot: 'v3.1.0',
   notes: [
-    'The release candidate: trustcrypto release-3.1.0 (libraries PR #33,',
-    'OnlyKey-Firmware PR #183), pinned at the branch heads 37aa531 / 9fceea1',
-    '(libraries re-squashed 2026-10-19). Stages with the working-tree patch',
-    'set. Ships DEBUG off. Carries the CTAPHID wipe fix (0c-coder/libraries',
-    '#20) since the re-squash.',
+    'The maintainer\'s pins ok-80e3ba0-fe9e293 (2026-10-26): release-3.1.0',
+    '(libraries PR #33, OnlyKey-Firmware PR #183) merged to master, plus the',
+    '3.1.0 security review fixes (libraries fe9e293). Stages with the',
+    'working-tree patch set and the RC fixes still open upstream',
+    '(fixes-3.1.0.js). Ships DEBUG off.',
   ].join('\n'),
 };

@@ -3,10 +3,12 @@
 # DEBUG on, from one command. Run it on the machine that builds firmware (Docker + the toolchain image
 # onlykey/onlykey-firmware-toolchain + an Arduino 1.6.5-r5/Teensyduino 1.27 tree):
 #
-#   bash tools/build-hardkey.sh            # -> $OUT/images/v3.1.0-test-<plugins>-fw<FW_PIN>-lib<LIB_PIN>.hex
+#   bash tools/build-hardkey.sh            # -> $OUT/images/v3.1.0-test-<plugins>-fw<FW_PIN>-lib<LIB_PIN>[-fix<nnnn>...].hex
 #
-# The base is the 3.1.0 release candidate WITH the fixes found testing it (libraries 37aa531 + 0008
-# + 0009 + 0010 + 0011 = LIB_PIN), so the hard key runs the same firmware as the soft key's plugin build.
+# The base is 3.1.0 at the maintainer's pins (OnlyKey-Firmware 80e3ba0, libraries fe9e293) WITH the fixes
+# upstream does not carry yet: the patch files in scripts/versions/patches-3.1.0/, `git am`ed in order -
+# the same files the soft key stages (fixes-3.1.0.js) - so the hard key runs the same firmware as the
+# soft key's plugin build.
 #
 # Why each step is the way it is:
 # - Plain clones of the source checkouts, not worktrees: the toolchain image copies the firmware tree
@@ -27,8 +29,9 @@ ROOT="${OK_ROOT:-$HOME/project/onlykey}"
 SRC="${FW_SRC:-$ROOT/fw-3.1.0-pr}"                    # source checkouts + the Arduino tree
 OUT="${FW_OUT:-$ROOT/fw-edge}"
 KIT="${KIT:-$ROOT/onlykey-testing}"                   # its lib/flash.js reads Intel HEX
-FW_PIN="${FW_PIN:-9fceea1}"
-LIB_PIN="${LIB_PIN:-b273489}"
+FW_PIN="${FW_PIN:-80e3ba0}"
+LIB_PIN="${LIB_PIN:-fe9e293}"
+PATCHES="$EMU/scripts/versions/patches-3.1.0"           # the RC fixes upstream does not carry yet
 PLUGINS="${PLUGINS:-edge}"
 LIMIT="${LIMIT:-0x39800}"                              # the first byte the code must not reach
 IMAGE=onlykey/onlykey-firmware-toolchain
@@ -47,6 +50,16 @@ for r in OnlyKey-Firmware libraries; do
 done
 git -C "$OUT/OnlyKey-Firmware" checkout -q --detach "$FW_PIN"
 git -C "$OUT/libraries" checkout -q -B edge/3.1.0 "$LIB_PIN"
+fixes=""
+for p in "$PATCHES"/*/*.patch; do
+  [ -f "$p" ] || continue
+  git -C "$OUT/libraries" -c user.name=build-hardkey -c user.email=build@localhost am -q "$p" \
+    || { git -C "$OUT/libraries" am --abort; echo "   $(basename "$p") does not apply to $LIB_PIN - not building"; exit 1; }
+  fixes="$fixes $(basename "$(dirname "$p")" | cut -c1-4)"
+done
+say "   RC fixes applied:${fixes:- none}"
+# the hex names the public pin and the fixes on it (a `git am` commit's own hash is nobody else's, and moves with the clock)
+FIXTAG="$(echo $fixes | sed 's/ /-/g')"; FIXTAG="${FIXTAG:+-fix$FIXTAG}"
 
 say "2. plugins: $PLUGINS (node-onlykey-lib firmware-plugins.js)"
 stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT
@@ -90,7 +103,7 @@ last=$(node -e '
 echo "   image: ${last% *} bytes, last byte ${last#* }"
 if [ $(( ${last#* } )) -ge $(( LIMIT )) ]; then echo "   REFUSED: the code reaches the plugin's flash at $LIMIT"; exit 1; fi
 
-name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}.hex"
+name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}.hex"
 cp "$hex" "$OUT/images/$name"
 sha=$(sha256sum "$OUT/images/$name" | cut -c1-64)
 say "6. $OUT/images/$name"
