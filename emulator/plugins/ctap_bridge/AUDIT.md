@@ -16,7 +16,7 @@ apps.onlykey.io / apps.crp.to).
 | fido2/solo.cpp | after `//case OKGETPUBKEY:` | `case OKGETPUBKEY:` - the extension forwards it to the key |
 | fido2/ok_extension.cpp | after `#include "onlykey.h"` | the plugin header |
 | fido2/ok_extension.cpp | before the stored-key gate `if (wc_level < 2 && opt1 != RESERVED_KEY_WEB_AGENT_DERIVATION)` | `if (!okplugin_ctap_bridge_allows(cmd, opt1))` - an allowed agent code skips the gate |
-| fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKGETPUBKEY` for an allowed code: the key type moved from the first payload byte into byte 6 (where the tunnel puts its last-packet length), then the base's `okcrypto_getpubkey` |
+| fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKGETPUBKEY` for an allowed code: the key type from the first payload byte (the tunnel puts its last-packet length in byte 6), the agent key derived with the base's `okcrypto_derive_key` exactly as `okcrypto_getpubkey` does for 132 / 232, and the reply SEALED with the tunnel's transit key (the base sends agent public keys unsealed, right for USB, not for the tunnel) |
 | fido2/device.cpp | after `#include "onlykey.h"` | the plugin header |
 | fido2/device.cpp | before `if (origin_ok && !(wc_policy & OKWC_DISABLE_EXT))` in `webcryptcheck` | the site set in config mode counts as a trusted origin |
 

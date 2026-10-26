@@ -55,11 +55,22 @@ int okplugin_ctap_bridge_site(const uint8_t *appid) {
   return memcmp(hash, appid, 32) == 0;
 }
 
+extern uint8_t ecc_public_key[(MAX_ECC_KEY_SIZE * 2) + 1];
+
+/*
+ * The agent public key, as okcrypto_getpubkey derives it for codes 132 / 232, with the reply sealed by the tunnel's
+ * transit key (send_transport_response encrypt = 1). buffer[7] is the key type, buffer[8..39] the identity hash.
+ */
 void okplugin_ctap_bridge_getpubkey(uint8_t *buffer) {
-  buffer[6] = buffer[7];
-  memmove(buffer + 7, buffer + 8, 56);
-  buffer[63] = 0;
-  okcrypto_getpubkey(buffer);
+  uint8_t code = buffer[5];
+  uint8_t type = buffer[7];
+  int v2 = code == DERIVATION_V2_PUBKEY_CODE;
+  if (type > KEYTYPE_CURVE25519 || (v2 && type == 0)) {
+    hidprint("Error key type");
+    return;
+  }
+  okcrypto_derive_key(type, buffer + 8, v2 ? RESERVED_KEY_DERIVATION : 0);
+  send_transport_response(ecc_public_key, 64, 1, 0);
 }
 
 void okplugin_ctap_bridge_recv(uint8_t *buffer) {
