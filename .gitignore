@@ -53,3 +53,6 @@ eeprom.bin
 npm-debug.log*
 .DS_Store
 
+
+# a patch bundled for the maintainer is sent, not kept: the .patch beside it is the source
+emulator/scripts/versions/patches-*/**/*.tar.gz
