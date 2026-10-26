@@ -16,6 +16,12 @@ module.exports = {
   name: 'ctap_bridge',
   minBase: '3.1.0',
   notes: 'agent derivation codes + OKGETPUBKEY over the WebAuthn tunnel, one extra allowed site; OKCTAPBRIDGE 0x7B (config mode); on while unset',
+  /*
+   * its 33 EEPROM bytes read as "on, no site" while unset, and left behind they change nothing: the soft key keeps its
+   * storage slot with or without this plugin (firmware-plugins slotPlugins) - adding it must not move the testnet soft
+   * key to an empty slot
+   */
+  stateless: true,
   hooks: [
     { file: 'okcore.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
     {
