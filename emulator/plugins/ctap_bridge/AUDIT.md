@@ -46,5 +46,7 @@ length, `buffer[7..]` the rpId), 4 clear the site - each only in config mode ("E
 
 ## Tests
 
-`tests/kit.test.js`: the report says on while unset; a change outside config mode is refused. The CTAP path is proven
-end to end by the web app on the box (the identity read over WebAuthn from Chromium).
+`tests/kit.test.js`: the report says on while unset; a change outside config mode is refused. The kit needs a DEBUG
+build (`OKEMU_DEBUG=1`): it knows the device booted from the console's boot banner, which a `OKEMU_VERSION=` release
+build does not print. The CTAP path is proven end to end by the web app on the box (Chromium, the testnet soft key on
+the USB gadget): the identity read, a new bucket sealed and opened again with a press, Passwords opened with a press.
