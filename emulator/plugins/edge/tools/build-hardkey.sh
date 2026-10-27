@@ -104,12 +104,24 @@ if [ -n "${BUILD_STAMP:-}" ]; then
   STAMPTAG="-b$BUILD_STAMP"
   say "   build stamp $BUILD_STAMP in place of the build time"
 fi
+# THE ELF IS KEPT beside the hex (OnlyKey.cpp.elf): the official script copies the hex out and deletes its build folder,
+# and with it the only file that says what each function and variable costs in flash and RAM (arm-none-eabi-nm/size -
+# the firmware size audit reads it). A copy of the script that also copies the ELF is mounted over its own; the build
+# itself is unchanged.
+INDOCKER=/onlykey/arduino-1.6.5-r5-teensy_127/in-docker-build.sh
+sed 's|^cp /builds/build/\*.hex /builds/.$|cp /builds/build/*.hex /builds/. \&\& cp /builds/build/*.elf /builds/.|' \
+  "$ARDUINO/in-docker-build.sh" > "$OUT/in-docker-build.keep-elf.sh"
+grep -q 'cp /builds/build/\*.elf' "$OUT/in-docker-build.keep-elf.sh" || { echo "the toolchain's hex copy line changed - not building"; exit 1; }
+chmod +x "$OUT/in-docker-build.keep-elf.sh"
+rm -f "$OUT/builds/"*.elf
 docker run --rm -v "$OUT/builds:/builds" -v "$OUT:/onlykey" -v "$ARDUINO:/onlykey/arduino-1.6.5-r5-teensy_127:ro" "${stamp_mount[@]}" \
+  -v "$OUT/in-docker-build.keep-elf.sh:$INDOCKER:ro" \
   -u "$(id -u):$(id -g)" "$IMAGE" "onlykey/arduino-1.6.5-r5-teensy_127/in-docker-build.sh" > "$OUT/build.log" 2>&1 \
   || { tail -30 "$OUT/build.log"; echo "BUILD FAILED"; exit 1; }
 grep -E "Sketch uses|Global variables" "$OUT/build.log" | sed 's/^/   /'
 hex="$OUT/builds/OnlyKey.cpp.hex"
 [ -s "$hex" ] || { echo "no hex in $OUT/builds"; exit 1; }
+[ -s "$OUT/builds/OnlyKey.cpp.elf" ] && echo "   elf: $OUT/builds/OnlyKey.cpp.elf (symbol sizes for the size audit)"
 
 say "5. size guard: the code must end below $LIMIT"
 last=$(node -e '
