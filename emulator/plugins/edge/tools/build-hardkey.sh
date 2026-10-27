@@ -3,7 +3,7 @@
 # DEBUG on, from one command. Run it on the machine that builds firmware (Docker + the toolchain image
 # onlykey/onlykey-firmware-toolchain + an Arduino 1.6.5-r5/Teensyduino 1.27 tree):
 #
-#   bash tools/build-hardkey.sh            # -> $OUT/images/v3.1.0-test-<plugins>-fw<FW_PIN>-lib<LIB_PIN>[-fix<nnnn>...].hex
+#   bash tools/build-hardkey.sh            # -> $OUT/images/v3.1.0-test-<plugins>-fw<FW_PIN>-lib<LIB_PIN>[-fix<nnnn>...][-b<BUILD_STAMP>].hex
 #
 # The base is 3.1.0 at the maintainer's pins (OnlyKey-Firmware 80e3ba0, libraries fe9e293) WITH the fixes
 # upstream does not carry yet: the patch files in scripts/versions/patches-3.1.0/, `git am`ed in order -
@@ -87,7 +87,24 @@ grep -q '^#define DEBUG ' "$OUT/libraries/onlykey/onlykey.h" || { echo "DEBUG li
 
 say "4. build (Docker, $IMAGE; log $OUT/build.log)"
 rm -f "$OUT/builds/"*.hex
-docker run --rm -v "$OUT/builds:/builds" -v "$OUT:/onlykey" -v "$ARDUINO:/onlykey/arduino-1.6.5-r5-teensy_127:ro" \
+# BUILD_STAMP (8 hex digits, the caller's hash of everything the build is made from - ok-edge tools/firmware.js) takes
+# the place of the build time: the Teensy core links the clock's time as __rtc_localtime (boards.txt
+# {extra.time.local}), the one value that made two builds of the same sources differ. It only seeds the RTC when no time
+# is set, and the OnlyKey firmware never reads the RTC (its time comes from the app). With the stamp the same sources
+# build the same hex byte for byte, and the hex carries the stamp (4 bytes, little-endian). Without it: the clock, as
+# the official build. The toolchain tree is read-only, so a stamped copy of boards.txt is mounted over its own.
+BOARDS=/onlykey/arduino-1.6.5-r5-teensy_127/arduino-1.6.5-r5/hardware/teensy/avr/boards.txt
+stamp_mount=()
+STAMPTAG=""
+if [ -n "${BUILD_STAMP:-}" ]; then
+  [[ "$BUILD_STAMP" =~ ^[0-9a-f]{8}$ ]] || { echo "BUILD_STAMP must be 8 lowercase hex digits - not building"; exit 1; }
+  sed "s/{extra.time.local}/0x$BUILD_STAMP/g" "$ARDUINO/arduino-1.6.5-r5/hardware/teensy/avr/boards.txt" > "$OUT/boards.stamped.txt"
+  grep -q "__rtc_localtime=0x$BUILD_STAMP" "$OUT/boards.stamped.txt" || { echo "no {extra.time.local} in boards.txt - not building"; exit 1; }
+  stamp_mount=(-v "$OUT/boards.stamped.txt:$BOARDS:ro")
+  STAMPTAG="-b$BUILD_STAMP"
+  say "   build stamp $BUILD_STAMP in place of the build time"
+fi
+docker run --rm -v "$OUT/builds:/builds" -v "$OUT:/onlykey" -v "$ARDUINO:/onlykey/arduino-1.6.5-r5-teensy_127:ro" "${stamp_mount[@]}" \
   -u "$(id -u):$(id -g)" "$IMAGE" "onlykey/arduino-1.6.5-r5-teensy_127/in-docker-build.sh" > "$OUT/build.log" 2>&1 \
   || { tail -30 "$OUT/build.log"; echo "BUILD FAILED"; exit 1; }
 grep -E "Sketch uses|Global variables" "$OUT/build.log" | sed 's/^/   /'
@@ -104,7 +121,7 @@ last=$(node -e '
 echo "   image: ${last% *} bytes, last byte ${last#* }"
 if [ $(( ${last#* } )) -ge $(( LIMIT )) ]; then echo "   REFUSED: the code reaches the plugin's flash at $LIMIT"; exit 1; fi
 
-name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}.hex"
+name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}${STAMPTAG}.hex"
 cp "$hex" "$OUT/images/$name"
 sha=$(sha256sum "$OUT/images/$name" | cut -c1-64)
 say "6. $OUT/images/$name"
