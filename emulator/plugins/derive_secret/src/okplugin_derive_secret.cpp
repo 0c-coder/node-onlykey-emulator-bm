@@ -10,7 +10,6 @@ void okcrypto_hkdf_info(const void *salt, const void *inputKey, void *outputKey,
     const uint8_t *info, size_t info_len);
 
 int okplugin_derive_secret_mode(const uint8_t *buffer) {
-  if (buffer[6] != DS_PAYLOAD_LEN) return -1;
   if (buffer[7] == DS_TOUCHLESS || buffer[7] == DS_TOUCH) return buffer[7];
   return -1;
 }
