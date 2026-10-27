@@ -27,5 +27,7 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer);
 int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code);
 int okplugin_ctap_bridge_site(const uint8_t *appid);
 void okplugin_ctap_bridge_getpubkey(uint8_t *buffer);
+/* the report over the WebAuthn tunnel, sealed: the same text as over USB (read only) */
+void okplugin_ctap_bridge_report_sealed(void);
 
 #endif

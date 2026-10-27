@@ -21,6 +21,38 @@ module.exports = function register({ it }, ctx) {
   });
 
   /*
+   * THE KEY'S SITE OVER THE TUNNEL (the server it belongs to, okcrypto.keySite): a page reads the same report a USB
+   * host reads - one answer, two ways.
+   */
+  it('ctap_bridge: its report over the tunnel - the key\'s site, as over USB', async ({ device, assert, signal, log }) => {
+    await device.restart({ signal });
+    await device.unlock(ctx.PINS.primary, { signal });
+    const since = device.mark(ctx.IFACE.VENDOR);
+    device.sendVendor({ msg: OKCTAPBRIDGE, slot: 0 });
+    const usb = ctx.okmsg.text(await device.waitHid(ctx.IFACE.VENDOR, { since, match: /ctap_bridge|Error/, timeoutMs: 6000, signal })).trim();
+    const Rectify = ctx.requireLib('@bmatusiak/rectify');
+    const plugins = ['host', 'transport/tunnel', 'session', 'device', 'okcrypto']
+      .map((p) => ctx.requireLib(`node-onlykey-lib/plugins/${p}`));
+    const { createWebAuthnCtap } = ctx.requireLib('node-onlykey-lib/transport/webauthn');
+    const { window } = ctx.kit.webenv.create(device, { signal });
+    plugins.config = { okcrypto: { ctap: createWebAuthnCtap({ credentials: window.navigator.credentials }) } };
+    const app = await new Promise((resolve, reject) => {
+      const a = Rectify.build(plugins, (err, started) => (err ? reject(err) : resolve(started)));
+      a.start();
+    });
+    let site;
+    try {
+      await app.services.okcrypto.connectTunnel();
+      site = await app.services.okcrypto.keySite();
+    } finally {
+      await app.destroy();
+    }
+    log(`USB: ${JSON.stringify(usb)}; tunnel: ${JSON.stringify(site)}`);
+    assert.deepEqual(site, { on: true, site: 'ok-edge.bmatusiak.workers.dev' }, 'the tunnel report');
+    assert.equal(usb, `ctap_bridge on site ${site.site}`, 'the USB report says the same');
+  });
+
+  /*
    * WHAT THE WEB APP DOES FOR ITS BUCKET KEY (ok-edge src/bucketTrade.ts), over the WebAuthn tunnel alone - the lib
    * composed as a page composes it (kit lib/webenv.js): the bucket identity (agent public key, no press), the bucket
    * key (agent X25519 ECDH) and its certificate (agent Ed25519 sign), each answered with the code the lib works out

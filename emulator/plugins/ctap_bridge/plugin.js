@@ -31,8 +31,12 @@ module.exports = {
       insert: 'before',
       text: '            case OKCTAPBRIDGE:\n                okplugin_ctap_bridge_recv(recv_buffer);\n                return;\n',
     },
-    /* the commands the WebAuthn extension forwards to the key: OKGETPUBKEY joins them */
+    /*
+     * the commands the WebAuthn extension forwards to the key: OKGETPUBKEY joins them, and OKCTAPBRIDGE for its report
+     * (the key's server: the site it trusts - Brad, 2026-10-27; solo.cpp does not include onlykey.h, so the wire value)
+     */
     { file: 'libraries/fido2/solo.cpp', anchor: '        //case OKGETPUBKEY:\n', insert: 'after', text: '        case OKGETPUBKEY:\n' },
+    { file: 'libraries/fido2/solo.cpp', anchor: '        //case OKGETPUBKEY:\n', insert: 'after', text: '        case (TYPE_INIT | 0x7B): /* OKCTAPBRIDGE, plugin ctap_bridge: its report only */\n' },
     { file: 'libraries/fido2/ok_extension.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
     {
       /* the stored-key gate: an allowed agent code skips it (the `if` guards the gate's own `if`) */
@@ -49,7 +53,12 @@ module.exports = {
       text: '                    } else if (cmd == OKGETPUBKEY && okplugin_ctap_bridge_allows(cmd, opt1)) {\n'
         + '                        large_buffer_offset = 0;\n'
         + '                        outputmode = WEBAUTHN;\n'
-        + '                        okplugin_ctap_bridge_getpubkey(recv_buffer);\n',
+        + '                        okplugin_ctap_bridge_getpubkey(recv_buffer);\n'
+        /* its report over the tunnel - read only: a change of setting still needs config mode, over USB */
+        + '                    } else if (cmd == OKCTAPBRIDGE && okplugin_ctap_bridge_allows(cmd, opt1)) {\n'
+        + '                        large_buffer_offset = 0;\n'
+        + '                        outputmode = WEBAUTHN;\n'
+        + '                        okplugin_ctap_bridge_report_sealed();\n',
     },
     { file: 'libraries/fido2/device.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
     {

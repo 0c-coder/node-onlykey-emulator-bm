@@ -45,9 +45,18 @@ static int cb_site(char *site) {
   return len;
 }
 
+/* "ctap_bridge on|off site <rpId>|none" into line (24 + CB_SITE_MAX bytes) - the report, USB and tunnel alike */
+static void cb_report(char *line) {
+  char site[CB_SITE_MAX + 1];
+  strcpy(line, "ctap_bridge ");
+  strcat(line, cb_on() ? "on site " : "off site ");
+  strcat(line, cb_site(site) ? site : "none");
+}
+
 int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code) {
   if (!cb_on()) return 0;
   if (cmd == OKGETPUBKEY) return code == RESERVED_KEY_DERIVATION || code == DERIVATION_V2_PUBKEY_CODE;
+  if (cmd == OKCTAPBRIDGE) return 1; /* its report, read only (okplugin_ctap_bridge_report_sealed) */
   if (cmd == OKSIGN || cmd == OKDECRYPT) return (code >= 201 && code <= 204) || (code >= 221 && code <= 224);
   return 0;
 }
@@ -139,9 +148,17 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer) {
       hidprint("Error unknown ctap_bridge action");
       return;
   }
-  char line[24 + CB_SITE_MAX] = "ctap_bridge ";
-  char site[CB_SITE_MAX + 1];
-  strcat(line, cb_on() ? "on site " : "off site ");
-  strcat(line, cb_site(site) ? site : "none");
+  char line[24 + CB_SITE_MAX];
+  cb_report(line);
   hidprint(line);
+}
+
+/*
+ * The report over the WebAuthn tunnel, sealed by the transit key: the same text as over USB, so a browser learns the
+ * key's site - the server it belongs to - the way every other host does. Read only: no action byte is read.
+ */
+void okplugin_ctap_bridge_report_sealed(void) {
+  char line[24 + CB_SITE_MAX];
+  cb_report(line);
+  send_transport_response((uint8_t *)line, strlen(line), 1, 0);
 }
