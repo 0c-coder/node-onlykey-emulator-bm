@@ -81,9 +81,18 @@ node -e '
   echo "   unit: $(basename "$unit") -> $f"
 done
 
+# DEBUG=0 builds without the debug console, as a release key runs - for telling a DEBUG-only effect from the
+# firmware's own (the kit needs DEBUG, so such a build is for trying on a key by hand)
+DEBUGTAG=""
+if [ "${DEBUG:-1}" = 0 ]; then
+  say "3. DEBUG off (no debug console - the kit cannot drive this build)"
+  grep -q '^//#define DEBUG //Enable Serial Monitor' "$OUT/libraries/onlykey/onlykey.h" || { echo "DEBUG is not off in onlykey.h - not building"; exit 1; }
+  DEBUGTAG="-nodebug"
+else
 say "3. DEBUG on (the kit drives a developer key through its debug console)"
 sed -i 's|^//#define DEBUG //Enable Serial Monitor|#define DEBUG //Enable Serial Monitor|' "$OUT/libraries/onlykey/onlykey.h"
 grep -q '^#define DEBUG ' "$OUT/libraries/onlykey/onlykey.h" || { echo "DEBUG line not found in onlykey.h - not building"; exit 1; }
+fi
 
 say "4. build (Docker, $IMAGE; log $OUT/build.log)"
 rm -f "$OUT/builds/"*.hex
@@ -145,7 +154,7 @@ last=$(node -e '
 echo "   image: ${last% *} bytes, last byte ${last#* }"
 if [ $(( ${last#* } )) -ge $(( LIMIT )) ]; then echo "   REFUSED: the code reaches the plugin's flash at $LIMIT"; exit 1; fi
 
-name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}${STAMPTAG}${CPUTAG}.hex"
+name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}${STAMPTAG}${CPUTAG}${DEBUGTAG}.hex"
 cp "$hex" "$OUT/images/$name"
 sha=$(sha256sum "$OUT/images/$name" | cut -c1-64)
 say "6. $OUT/images/$name"
