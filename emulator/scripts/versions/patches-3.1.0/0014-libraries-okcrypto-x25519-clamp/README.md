@@ -61,5 +61,20 @@ keys and the ECDH result with Bob's RFC public key compared with the RFC's. Befo
 clamped form gives a non-RFC public key and shared secret; after it, the RFC values. A key already in clamped form is
 the same before and after.
 
-**On our builds (to be recorded here):** the bucket key is an X25519 ECDH between two agent-derived keys, so on a copy of
-the testnet soft key: does the bucket identity, the bucket key and the sealed bucket survive this patch?
+**Measured on one existing key (2026-10-26):** the kit's key made on `fe9e293` + 0012 + 0013, then run on the same build
+plus this patch - the ctap_bridge kit test, which makes ok-edge's bucket key over the WebAuthn tunnel exactly as the
+web app does:
+
+| | without 0014 | with 0014 |
+|---|---|---|
+| bucket identity (agent Ed25519, label "") | `64030f2f7d5a` | `64030f2f7d5a` - same |
+| agent X25519 public key (label `onlykey-bucket/key`) | `dfedbf1c1e52fb39…` | `e4a0139a7f4a89a6…` - changed |
+| bucket key (HKDF of the agent X25519 ECDH) | `12507ede06065f61…` | `fed84f0076578261…` - changed |
+
+So, as section 3 says, an existing agent-derived X25519 key changes with this patch, and so does anything made from
+it. For our apps: a device that makes its bucket key after the upgrade gets another one than the devices that made
+theirs before (each keeps the one it made), so their room frame keys differ and they cannot read each other's frames;
+anything sealed to an agent X25519 key before the upgrade does not open after it. Ed25519 (the bucket identity, every
+signature) is untouched.
+
+Not sent: it needs the maintainer's migration plan, and ours would need a bucket key that does not move with it.
