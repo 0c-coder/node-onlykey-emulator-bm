@@ -11,6 +11,7 @@
 const hex = (b) => Buffer.from(b).toString('hex');
 const FIELD_DERIVE_MODE = 30;
 const MODE_CHALLENGE = 0; /* the default */
+const MODE_PRESS = 1;
 const MODE_NONE = 2;
 
 module.exports = function register({ it }, ctx) {
@@ -76,6 +77,13 @@ module.exports = function register({ it }, ctx) {
     /* touch at the default: the gate's code too - its own code, the mode is in the payload */
     const touchCode = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: presser(device, log) });
     assert.notEqual(touchCode, guarded, 'touch and touchless are two unrelated secrets');
+
+    /* field 30 = press (the phones' setting): touchless and touch each take one press, the same keys */
+    await setDeriveMode(device, signal, assert, MODE_PRESS);
+    const pressedA = await derive(device, signal, 'okedge/test/a', { confirm: pressOne(device, log) });
+    assert.equal(pressedA, guarded, 'the touchless key, asked by a press');
+    const pressedT = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: pressOne(device, log) });
+    assert.equal(pressedT, touchCode, 'the touch key, asked by a press');
 
     await setDeriveMode(device, signal, assert, MODE_NONE);
     try {
