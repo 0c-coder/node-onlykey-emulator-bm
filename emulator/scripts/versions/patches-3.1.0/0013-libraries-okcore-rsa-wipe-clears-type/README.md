@@ -4,7 +4,7 @@
 **For:** trustcrypto/libraries `master` @ `fe9e293` (the pins ok-80e3ba0-fe9e293)
 **Size:** 1 file, +6: `onlykey/okcore.cpp` (`rsa_priv_flash()`, the wipe branch).
 **Order:** applies to `fe9e293` alone (`git am` clean), and with 0012 in either order. Firmware only.
-**Status:** staged on our builds (fixes-3.1.0.js) so it is tested all the time; not sent yet. Brad decides when.
+**Status:** SENT to the maintainer 2026-10-26 (by Brad: the patch alone, in `0013-okcore-wiping-an-RSA-slot-clears-its-key-type.tar.gz`, for ok-80e3ba0-fe9e293-test). Staged on our builds until a pin carries it; then the re-pin removes this folder.
 **Write-up:** the finding in full, in the workspace: `FINDING-rsa-wipe-keeps-key-type.md`, with
 `FINDING-rsa-wipe/rsa_wipe_check.py` (the reproduction).
 

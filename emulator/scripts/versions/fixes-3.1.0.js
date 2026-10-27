@@ -8,7 +8,7 @@
  *
  *   0012  okcore: the 20 s user timer stops when a request is decided, so it cannot answer "Timeout" for the next one
  *         (was the emulator plugin fix_usertimeout until 2026-10-26; sent to the maintainer 2026-10-26)
- *   0013  okcore: wiping an RSA slot clears its key type, so the wiped slot reads as empty
+ *   0013  okcore: wiping an RSA slot clears its key type, so the wiped slot reads as empty (sent 2026-10-26)
  *
  * HELD (a HOLD file in its folder: kept, not staged, not sent):
  *   0014  okcrypto: clamp X25519 scalars (RFC 7748) - changes existing keys, needs the maintainer's migration plan
