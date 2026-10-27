@@ -388,6 +388,25 @@ Napi::Value FactoryReset(const Napi::CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
+/*
+ * Whether the running firmware's callbacks hold the event loop. Unref: the process may exit while the firmware runs
+ * (the thread goes with it); Ref: held again. The firmware is not stopped either way - it cannot be restarted in one
+ * process, so a host that closes the key and may open it again unrefs instead of stopping.
+ */
+Napi::Value Ref(const Napi::CallbackInfo &info) {
+  for (auto *t : {&g.led, &g.stream, &g.restart, &g.plugin}) {
+    if (*t) t->Ref(info.Env());
+  }
+  return info.Env().Undefined();
+}
+
+Napi::Value Unref(const Napi::CallbackInfo &info) {
+  for (auto *t : {&g.led, &g.stream, &g.restart, &g.plugin}) {
+    if (*t) t->Unref(info.Env());
+  }
+  return info.Env().Undefined();
+}
+
 Napi::Value Stop(const Napi::CallbackInfo &info) {
   Napi::Env env = info.Env();
   okemu_hal_shutdown();
@@ -417,6 +436,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("rounds",          Napi::Function::New(env, Rounds));
   exports.Set("factoryReset", Napi::Function::New(env, FactoryReset));
   exports.Set("stop",         Napi::Function::New(env, Stop));
+  exports.Set("ref",          Napi::Function::New(env, Ref));
+  exports.Set("unref",        Napi::Function::New(env, Unref));
   exports.Set("kbdSetReport", Napi::Function::New(env, KbdSetReport));
   exports.Set("kbdGetReport", Napi::Function::New(env, KbdGetReport));
   /* usb_desc.h interface numbers; HIDn in the UI is interface n-1. */

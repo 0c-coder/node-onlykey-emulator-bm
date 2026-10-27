@@ -288,6 +288,19 @@ class OnlyKeyEmulator extends EventEmitter {
     native.stop();
     this.started = false;
   }
+
+  /*
+   * Let the process exit while the firmware runs (unref), or hold it again (ref). The firmware keeps running either
+   * way: it cannot be restarted in one process (its flash is mapped for good), so a host that may open the key again
+   * unrefs on close instead of stopping - stop() releases the callbacks the running firmware still calls.
+   */
+  unref() {
+    if (this.started && typeof native.unref === 'function') native.unref();
+  }
+
+  ref() {
+    if (this.started && typeof native.ref === 'function') native.ref();
+  }
 }
 
 module.exports = new OnlyKeyEmulator();
