@@ -49,6 +49,7 @@ module.exports = function register({ it }, ctx) {
   /* field 30 in config mode, then a restart (config mode ends there) and the unlock */
   async function setDeriveMode(device, signal, assert, mode) {
     await device.restart({ signal });
+    await device.unlock(ctx.PINS.primary, { signal });
     await device.enterConfigMode(ctx.PINS.primary, { signal });
     const since = device.mark(ctx.IFACE.VENDOR);
     device.sendVendor({ msg: ctx.okmsg.MSG.OKSETSLOT, slot: 1, field: FIELD_DERIVE_MODE, payload: Buffer.from([mode]) });
