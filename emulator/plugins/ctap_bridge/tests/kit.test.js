@@ -48,7 +48,8 @@ module.exports = function register({ it }, ctx) {
       await app.destroy();
     }
     log(`USB: ${JSON.stringify(usb)}; tunnel: ${JSON.stringify(site)}`);
-    assert.deepEqual(site, { on: true, site: 'ok-edge.bmatusiak.workers.dev' }, 'the tunnel report');
+    assert.equal(site.on, true, 'the tunnel report: on');
+    assert.equal(site.site, 'ok-edge.bmatusiak.workers.dev', 'the tunnel report: the default site');
     assert.equal(usb, `ctap_bridge on site ${site.site}`, 'the USB report says the same');
   });
 
