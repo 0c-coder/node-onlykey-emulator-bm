@@ -11,8 +11,7 @@ request and changes no existing behaviour.
 |---|---|---|
 | fido2/ok_extension.cpp | after `#include "onlykey.h"` | the plugin header |
 | fido2/solo.cpp | after `case OKSIGN:` | `case (TYPE_INIT \| 0x7C):` - the extension forwards OKDERIVESECRET to the key (solo.cpp does not include onlykey.h, so the wire value) |
-| fido2/ok_extension.cpp | before `uint8_t transit_key[32];` | `derive_secret_touch()`: a press (`ctap_user_presence_test`), whatever field 30 says - the base gate's own calls |
-| fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKDERIVESECRET` with opt1 = 128: touch asks for the press first (it holds the request); touchless goes through the base's derive gate (`web_agent_derive_gate`), so field 30 decides; then `okplugin_derive_secret` |
+| fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKDERIVESECRET` with opt1 = 128: the base's derive gate (`web_agent_derive_gate`) first - it holds the request - with a press as its floor for touch (`USER_INPUT_PRESS`) and none for touchless; then `okplugin_derive_secret` |
 
 ## What it answers
 
@@ -29,10 +28,12 @@ after the connect), slot 128, payload `[mode][SHA-256(label)]`, 33 bytes in one 
   site cannot derive another site's secret).
 - **The gate:** the request reaches the plugin only from a site the key already accepts (`webcryptcheck`), only over
   a transit session (unlocked), and only for slot 128 - the slot the base lets through at the default webcrypt level.
-  Touch: always a press, whatever field 30 says. Touchless: the base's derive gate, as every derive - field 30 decides:
-  the challenge code by default (bytes 0/15/31 of SHA-256 of the 33-byte payload, mod 6, mod 3 on a DUO, plus one), a
-  press, or none. So the touchless key is protected until the person unprotects it (field 30 = none, in config mode).
-  Either way the request is held open while the key waits (`CTAP2_UP_DELAY_MS`).
+  Both go through the base's derive gate, as every derive. Touchless: field 30 decides - the challenge code by default
+  (bytes 0/15/31 of SHA-256 of the 33-byte payload, mod 6, mod 3 on a DUO, plus one), a press, or none; so the
+  touchless key is protected until the person unprotects it (field 30 = none, in config mode). Touch: the same gate
+  with a press as its floor - the code or a press as field 30 says, and a press when it says none; never unpressed.
+  The payload carries the mode, so touch and touchless ask different codes. The gate is the one wait the LED, the
+  soft key's sheet and key_chain's press record know. Either way the request is held open (`CTAP2_UP_DELAY_MS`).
 
 ## Stored
 

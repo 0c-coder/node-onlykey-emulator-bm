@@ -4,9 +4,9 @@
  * comes in through `ctx`. The lib is composed as a page composes it (kit lib/webenv.js) and asked through its own
  * okcrypto.deriveSecret, so the test covers the request the apps will make, not a hand-built one.
  *
- * Two keys, the same settings, a flag in the request: touch always asks for a press; touchless goes through the
- * key's derive setting (field 30) like every derive - the code by default, so it is protected until the person
- * unprotects it (field 30 = none).
+ * Two keys, the same settings, a flag in the request, one gate: touchless goes through the key's derive setting
+ * (field 30) like every derive - the code by default, so it is protected until the person unprotects it (field 30 =
+ * none); touch through the same gate with a press as its floor - the code at the default, one press at none.
  */
 const hex = (b) => Buffer.from(b).toString('hex');
 const FIELD_DERIVE_MODE = 30;
@@ -45,6 +45,12 @@ module.exports = function register({ it }, ctx) {
     await device.sleep(1500);
     if (digits) device.pressLine(digits); else device.press(1);
   };
+  /* a key whose derive setting asks one press: one button, whatever code the host shows */
+  const pressOne = (device, log) => async () => {
+    log('one press');
+    await device.sleep(1500);
+    device.press(1);
+  };
 
   /* field 30 in config mode, then a restart (config mode ends there) and the unlock */
   async function setDeriveMode(device, signal, assert, mode) {
@@ -67,6 +73,9 @@ module.exports = function register({ it }, ctx) {
     const guarded = await derive(device, signal, 'okedge/test/a', { confirm: presser(device, log) });
     log(`touchless a (field 30 default, the code pressed): ${guarded.slice(0, 16)}`);
     assert.equal(guarded.length, 64, 'a secret is 32 bytes');
+    /* touch at the default: the gate's code too - its own code, the mode is in the payload */
+    const touchCode = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: presser(device, log) });
+    assert.notEqual(touchCode, guarded, 'touch and touchless are two unrelated secrets');
 
     await setDeriveMode(device, signal, assert, MODE_NONE);
     try {
@@ -78,10 +87,11 @@ module.exports = function register({ it }, ctx) {
       const b = await derive(device, signal, 'okedge/test/b');
       assert.notEqual(b, a1, 'another label, another secret');
 
-      /* touch: a press even with field 30 = none, and another key */
-      const t1 = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: presser(device, log) });
-      const t2 = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: presser(device, log) });
+      /* touch: a press even with field 30 = none (its floor), and the same touch key however it was pressed */
+      const t1 = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: pressOne(device, log) });
+      const t2 = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: pressOne(device, log) });
       assert.equal(t2, t1, 'one label, one touch secret');
+      assert.equal(t1, touchCode, 'the touch key is one key, asked by code or by press');
       assert.notEqual(t1, a1, 'touch and touchless are two unrelated secrets');
       let unpressed = null;
       try { unpressed = await derive(device, signal, 'okedge/test/a', { touch: true }); } catch (_) { /* refused: right */ }
