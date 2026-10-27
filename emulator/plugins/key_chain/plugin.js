@@ -30,6 +30,9 @@
  *                        its confirmation (field 30: a press or the 3-digit code) - the same press
  *                        record, marked as a derive, with the mode
  *  11 ok_extension.cpp   web_agent_derive_gate(): that wait ended (pressed, wrong code, timed out)
+ *  12 ok_extension.cpp   web_agent_derive_gate(): a derive answered with no confirmation (field 30 =
+ *                        none) - event "silent", the same record with the mode "none", so a use
+ *                        nobody was asked about is still shown to the person
  *
  * The app side: okemu_plugin_event() (jni/okemu_jni.cpp) -> NativeOkEmu
  * onPluginEvent -> src/keyChainRecorder.ts (derive records) and src/pressAsk.ts ->
@@ -74,6 +77,13 @@ module.exports = {
       anchor: '    if (but == -2) {\n',
       insert: 'before',
       text: '    okplugin_key_chain_derive_done(but);\n',
+    },
+    {
+      /* the gate's no-confirmation exit: the derive happens unasked - said, not waited on */
+      file: 'libraries/fido2/ok_extension.cpp',
+      anchor: '    if (need == USER_INPUT_NONE) return 0;\n',
+      insert: 'before',
+      text: '    if (need == USER_INPUT_NONE) okplugin_key_chain_derive_silent(outputmode, data, len);\n',
     },
     {
       file: 'okcrypto.cpp',

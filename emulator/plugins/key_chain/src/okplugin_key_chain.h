@@ -42,4 +42,7 @@ void okplugin_key_chain_derive_wait(int transport, uint8_t need, const uint8_t *
 /* that wait ended: the confirmation test's result (1 entered, 0 timed out, -2 wrong button, -1 cancelled) */
 void okplugin_key_chain_derive_done(int result);
 
+/* a slot-128 derive the gate answered with no confirmation (field 30 = none); data/len as derive_wait's */
+void okplugin_key_chain_derive_silent(int transport, const uint8_t *data, int len);
+
 #endif

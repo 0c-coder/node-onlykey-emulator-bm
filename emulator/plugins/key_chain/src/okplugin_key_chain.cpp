@@ -87,13 +87,15 @@ static int derived_code(uint8_t slot) {
  *   [2]  0xE4 (OKCONNECT) and [3] 128: a slot-128 derive, not a sign or decrypt
  *   [4]  1: [37..68] is the label hash (data[0..31])
  *   [5..36]  SHA-256(data): the challenge code is (h[0] % 6) + 1, (h[15] % 6) + 1, (h[31] % 6) + 1
- *   [69] the confirmation asked: 1 a button press, 0 the 3-digit code
+ *   [69] the confirmation asked: 1 a button press, 0 the 3-digit code, 2 none
  * Its end, event "press_end": [0] 1, [1] the test's result as a signed byte.
+ * A derive the gate answers with no confirmation (field 30 = none) is event "silent", the same record
+ * with [69] = 2: nothing waits and nothing ends, it has happened.
  */
 #define DERIVE_OPCODE 0xE4
 #define DERIVE_SLOT 128
 
-void okplugin_key_chain_derive_wait(int transport, uint8_t need, const uint8_t *data, int len) {
+static void derive_record(const char *name, int transport, uint8_t mode, const uint8_t *data, int len) {
 #ifdef KC_HAVE_SINK
   uint8_t rec[PRESS_BYTES + 1];
   if (!okemu_plugin_event || !data || len < 32) return;
@@ -108,11 +110,19 @@ void okplugin_key_chain_derive_wait(int transport, uint8_t need, const uint8_t *
   sha256_update(&ctx, data, (size_t)len);
   sha256_final(&ctx, rec + 5);
   memcpy(rec + 37, data, 32);
-  rec[PRESS_BYTES] = need == 1 ? 1 : 0;
-  okemu_plugin_event("press", rec, sizeof(rec));
+  rec[PRESS_BYTES] = mode;
+  okemu_plugin_event(name, rec, sizeof(rec));
 #else
-  (void)transport; (void)need; (void)data; (void)len;
+  (void)name; (void)transport; (void)mode; (void)data; (void)len;
 #endif
+}
+
+void okplugin_key_chain_derive_wait(int transport, uint8_t need, const uint8_t *data, int len) {
+  derive_record("press", transport, need == 1 ? 1 : 0, data, len);
+}
+
+void okplugin_key_chain_derive_silent(int transport, const uint8_t *data, int len) {
+  derive_record("silent", transport, 2, data, len);
 }
 
 void okplugin_key_chain_derive_done(int result) {
