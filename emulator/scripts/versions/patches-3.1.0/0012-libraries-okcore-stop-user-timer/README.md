@@ -67,4 +67,4 @@ can be pressed. With the fix it passes.
 | without the line | fail: the old timer ran out 20,068 ms after A's prime, between B's packets; B was answered "Timeout occured while waiting for confirmation on OnlyKey" before its press |
 | with the line | pass: no timer ran out by 21,512 ms; B received nothing before its press and was signed after it |
 
-On `fe9e293`: re-run when the new pins are audited (the emulator stages this patch by default, fixes-3.1.0.js).
+On `fe9e293` (2026-10-26): kit 42 passes on the DEBUG emulator staging 0012 + 0013 (8/0 with test 19); the whole kit on the emulator (205/0) and on developer hard key 2 (178/0, `OKT_FIRMWARE_FIXES=0012,0013`).

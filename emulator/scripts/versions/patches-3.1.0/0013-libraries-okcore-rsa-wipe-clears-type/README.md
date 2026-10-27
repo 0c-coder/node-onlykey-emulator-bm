@@ -58,3 +58,5 @@ the code it touches is the same at `fe9e293`.
 **In the kit:** onlykey-testing `01-protocol/19-rsa-keys.test.js`, "OKWIPEPRIV clears an RSA slot": with the fix (an
 emulator staging 0013, or a hard key flashed with it and `OKT_FIRMWARE_FIXES=0013`) the wiped slot must read as empty;
 without it the stale type is pinned as the shipped behaviour.
+
+**On `fe9e293` (2026-10-26):** passes on developer hard key 2 (Tim's pins + 0012 + 0013, the whole kit 178/0) and on the DEBUG emulator staging 0012 + 0013: "after the wipe: Error no RSA Private Key set in this slot".
