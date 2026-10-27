@@ -108,6 +108,18 @@ fi
 # and with it the only file that says what each function and variable costs in flash and RAM (arm-none-eabi-nm/size -
 # the firmware size audit reads it). A copy of the script that also copies the ELF is mounted over its own; the build
 # itself is unchanged.
+# CPU_MHZ (optional; 72 as the official build): the Teensy's clock, for comparing builds - its size and how long
+# the key takes to sign. A copy of the toolchain's preferences with custom_speed changed is mounted over its own.
+cpu_mount=()
+CPUTAG=""
+if [ -n "${CPU_MHZ:-}" ] && [ "$CPU_MHZ" != 72 ]; then
+  [[ "$CPU_MHZ" =~ ^(96|72|48|24)$ ]] || { echo "CPU_MHZ must be 96, 72, 48 or 24 - not building"; exit 1; }
+  sed "s/^custom_speed=teensy31_72$/custom_speed=teensy31_$CPU_MHZ/" "$ARDUINO/arduino-1.6.5-r5/preferences.txt" > "$OUT/preferences.cpu.txt"
+  grep -q "^custom_speed=teensy31_$CPU_MHZ$" "$OUT/preferences.cpu.txt" || { echo "no custom_speed=teensy31_72 in preferences.txt - not building"; exit 1; }
+  cpu_mount=(-v "$OUT/preferences.cpu.txt:/onlykey/arduino-1.6.5-r5-teensy_127/arduino-1.6.5-r5/preferences.txt:ro")
+  CPUTAG="-cpu$CPU_MHZ"
+  say "   CPU ${CPU_MHZ} MHz (the official build is 72)"
+fi
 INDOCKER=/onlykey/arduino-1.6.5-r5-teensy_127/in-docker-build.sh
 sed 's|^cp /builds/build/\*.hex /builds/.$|cp /builds/build/*.hex /builds/. \&\& cp /builds/build/*.elf /builds/.|' \
   "$ARDUINO/in-docker-build.sh" > "$OUT/in-docker-build.keep-elf.sh"
@@ -115,7 +127,7 @@ grep -q 'cp /builds/build/\*.elf' "$OUT/in-docker-build.keep-elf.sh" || { echo "
 chmod +x "$OUT/in-docker-build.keep-elf.sh"
 rm -f "$OUT/builds/"*.elf
 docker run --rm -v "$OUT/builds:/builds" -v "$OUT:/onlykey" -v "$ARDUINO:/onlykey/arduino-1.6.5-r5-teensy_127:ro" "${stamp_mount[@]}" \
-  -v "$OUT/in-docker-build.keep-elf.sh:$INDOCKER:ro" \
+  -v "$OUT/in-docker-build.keep-elf.sh:$INDOCKER:ro" "${cpu_mount[@]}" \
   -u "$(id -u):$(id -g)" "$IMAGE" "onlykey/arduino-1.6.5-r5-teensy_127/in-docker-build.sh" > "$OUT/build.log" 2>&1 \
   || { tail -30 "$OUT/build.log"; echo "BUILD FAILED"; exit 1; }
 grep -E "Sketch uses|Global variables" "$OUT/build.log" | sed 's/^/   /'
@@ -133,7 +145,7 @@ last=$(node -e '
 echo "   image: ${last% *} bytes, last byte ${last#* }"
 if [ $(( ${last#* } )) -ge $(( LIMIT )) ]; then echo "   REFUSED: the code reaches the plugin's flash at $LIMIT"; exit 1; fi
 
-name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}${STAMPTAG}.hex"
+name="v3.1.0-test-${PLUGINS//,/-}-fw${FW_PIN}-lib${LIB_PIN}${FIXTAG}${STAMPTAG}${CPUTAG}.hex"
 cp "$hex" "$OUT/images/$name"
 sha=$(sha256sum "$OUT/images/$name" | cut -c1-64)
 say "6. $OUT/images/$name"
