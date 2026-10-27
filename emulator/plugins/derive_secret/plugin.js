@@ -61,11 +61,15 @@ module.exports = {
         + '                        large_buffer_offset = 0;\n'
         + '                        outputmode = WEBAUTHN;\n'
         + '                        {\n'
-        + '                            int g = okplugin_derive_secret_mode(recv_buffer) == DS_TOUCH ? derive_secret_touch()\n'
-        + '                                : web_agent_derive_gate(USER_INPUT_NONE, recv_buffer + 7, DS_PAYLOAD_LEN);\n'
-        + '                            if (g) return g;\n'
-        + '                        }\n'
-        + '                        okplugin_derive_secret(recv_buffer, _appid);\n',
+        + '                            /* the request, copied before the wait: while a gate waits it serves USB, and recv_buffer is reused */\n'
+        + '                            uint8_t ds_req[7 + DS_PAYLOAD_LEN];\n'
+        + '                            memcpy(ds_req, recv_buffer, sizeof(ds_req));\n'
+        + '                            int g = okplugin_derive_secret_mode(ds_req) == DS_TOUCH ? derive_secret_touch()\n'
+        + '                                : web_agent_derive_gate(USER_INPUT_NONE, ds_req + 7, DS_PAYLOAD_LEN);\n'
+        + '                            if (g) { memset(ds_req, 0, sizeof(ds_req)); return g; }\n'
+        + '                            okplugin_derive_secret(ds_req, _appid);\n'
+        + '                            memset(ds_req, 0, sizeof(ds_req));\n'
+        + '                        }\n',
     },
   ],
 };
