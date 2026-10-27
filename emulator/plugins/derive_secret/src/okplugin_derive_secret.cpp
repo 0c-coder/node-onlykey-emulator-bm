@@ -16,6 +16,14 @@ int okplugin_derive_secret_mode(const uint8_t *buffer) {
 
 void okplugin_derive_secret(const uint8_t *buffer, const uint8_t *appid) {
   int mode = okplugin_derive_secret_mode(buffer);
+#ifdef DEBUG
+  Serial.print("derive_secret mode=");
+  Serial.print(mode);
+  Serial.print(" byte7=");
+  Serial.print(buffer[7]);
+  Serial.print(" appid=");
+  Serial.println(appid ? "set" : "null");
+#endif
   if (mode < 0 || !appid) {
     hidprint("Error derive_secret request");
     return;
