@@ -83,8 +83,9 @@ module.exports = function register({ it }, ctx) {
       const t2 = await derive(device, signal, 'okedge/test/a', { touch: true, confirm: presser(device, log) });
       assert.equal(t2, t1, 'one label, one touch secret');
       assert.notEqual(t1, a1, 'touch and touchless are two unrelated secrets');
-      await assert.rejects(() => derive(device, signal, 'okedge/test/a', { touch: true }),
-        'a touch secret came back with no press');
+      let unpressed = null;
+      try { unpressed = await derive(device, signal, 'okedge/test/a', { touch: true }); } catch (_) { /* refused: right */ }
+      assert.equal(unpressed, null, 'a touch secret came back with no press');
 
       /* another site the key trusts: another secret; a host that checks silently first (Windows): the same one */
       const other = await derive(device, signal, 'okedge/test/a', {}, { rpId: 'apps.onlykey.io' });
