@@ -19,4 +19,50 @@ module.exports = function register({ it }, ctx) {
     reply = await device.waitHid(ctx.IFACE.VENDOR, { since, match: /ctap_bridge|Error/, timeoutMs: 6000, signal });
     assert.equal(ctx.okmsg.text(reply).trim(), 'Error not in config mode');
   });
+
+  /*
+   * WHAT THE WEB APP DOES FOR ITS BUCKET KEY (ok-edge src/bucketTrade.ts), over the WebAuthn tunnel alone - the lib
+   * composed as a page composes it (kit lib/webenv.js): the bucket identity (agent public key, no press), the bucket
+   * key (agent X25519 ECDH) and its certificate (agent Ed25519 sign), each answered with the code the lib works out
+   * from the bytes it sent - the code the web app shows. The certificate must verify.
+   */
+  it('ctap_bridge: the bucket key over the tunnel - agent public key, ECDH and sign, each with its code', async ({ device, assert, signal, log }) => {
+    await device.restart({ signal });
+    await device.unlock(ctx.PINS.primary, { signal });
+    const Rectify = ctx.requireLib('@bmatusiak/rectify');
+    const plugins = ['host', 'transport/tunnel', 'session', 'device', 'okcrypto']
+      .map((p) => ctx.requireLib(`node-onlykey-lib/plugins/${p}`));
+    const { createWebAuthnCtap } = ctx.requireLib('node-onlykey-lib/transport/webauthn');
+    const { window } = ctx.kit.webenv.create(device, { signal });
+    plugins.config = { okcrypto: { ctap: createWebAuthnCtap({ credentials: window.navigator.credentials }) } };
+    const app = await new Promise((resolve, reject) => {
+      const a = Rectify.build(plugins, (err, started) => (err ? reject(err) : resolve(started)));
+      a.start();
+    });
+    try {
+      const okcrypto = app.services.okcrypto;
+      await okcrypto.connectTunnel();
+      const bid = ctx.requireLib('node-onlykey-lib/bucket').bucketIdentity;
+      const { publicKey, id } = await bid.readIdentity(okcrypto);
+      log(`bucket identity ${id.slice(0, 12)} (agent public key over the tunnel)`);
+
+      /* the code: pressed once the key has primed its challenge (counted before each ask: it may prime first) */
+      const PRIMED = ctx.kit.pqc.PRIMED;
+      let before = device.log.count(PRIMED);
+      const confirm = async ({ digits }) => {
+        log(`the code the host shows: ${digits.join(' ')}`);
+        await device.log.waitForCount(PRIMED, before + 1, { timeoutMs: 60000, signal, pending: device.pending });
+        device.pressLine(digits);
+      };
+      const opts = { confirm, timeoutMs: 60000 };
+      const bucketKey = await bid.deriveBucketKey(okcrypto, publicKey, opts);
+      log('bucket key made (agent X25519 ECDH over the tunnel)');
+      before = device.log.count(PRIMED);
+      const certificate = await bid.certify(okcrypto, publicKey, bucketKey.publicKey, opts);
+      assert.ok(bid.verifyCertificate({ identityPublicKey: publicKey, bucketPublicKey: bucketKey.publicKey, certificate }),
+        'the certificate the key signed over the tunnel does not verify');
+    } finally {
+      await app.destroy();
+    }
+  });
 };
