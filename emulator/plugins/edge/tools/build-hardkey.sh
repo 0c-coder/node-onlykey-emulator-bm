@@ -54,9 +54,7 @@ fixes=""
 for p in "$PATCHES"/*/*.patch; do
   [ -f "$p" ] || continue
   [ -f "$(dirname "$p")/HOLD" ] && { say "   held, not applied: $(basename "$(dirname "$p")")"; continue; }
-  # --committer-date-is-author-date: the commit takes the patch's own date, not the clock's, so the same patches make
-  # the same commit hash - the firmware embeds it, and the same sources must give the same hex byte for byte
-  git -C "$OUT/libraries" -c user.name=build-hardkey -c user.email=build@localhost am -q --committer-date-is-author-date "$p" \
+  git -C "$OUT/libraries" -c user.name=build-hardkey -c user.email=build@localhost am -q "$p" \
     || { git -C "$OUT/libraries" am --abort; echo "   $(basename "$p") does not apply to $LIB_PIN - not building"; exit 1; }
   fixes="$fixes $(basename "$(dirname "$p")" | cut -c1-4)"
 done
