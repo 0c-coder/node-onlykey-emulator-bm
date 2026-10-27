@@ -67,7 +67,9 @@ module.exports = {
         + '                            int g = okplugin_derive_secret_mode(ds_req) == DS_TOUCH ? derive_secret_touch()\n'
         + '                                : web_agent_derive_gate(USER_INPUT_NONE, ds_req + 7, DS_PAYLOAD_LEN);\n'
         + '                            if (g) { memset(ds_req, 0, sizeof(ds_req)); return g; }\n'
-        + '                            okplugin_derive_secret(ds_req, _appid);\n'
+        + '                            /* the rpId hash: U2F hands it in; on CTAP2 _appid is NULL (extend_fido2), and getAssertion holds it */\n'
+        + '                            extern struct _getAssertionState getAssertionState;\n'
+        + '                            okplugin_derive_secret(ds_req, _appid ? _appid : getAssertionState.buf.authData.rpIdHash);\n'
         + '                            memset(ds_req, 0, sizeof(ds_req));\n'
         + '                        }\n',
     },
