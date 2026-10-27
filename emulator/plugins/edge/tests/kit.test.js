@@ -1176,14 +1176,24 @@ module.exports = function register({ it }, ctx) {
         /* a host key standing in for github.com, pinned */
         const hk = crypto.generateKeyPairSync('ed25519');
         const hostBlob = Buffer.concat([wire.string(Buffer.from('ssh-ed25519')), wire.string(hk.publicKey.export({ format: 'der', type: 'spki' }).subarray(12))]);
-        const config = { ssh: 'ssh://claude@okt', gpgUid: 'Claude (okt agent) <claude@okt>', committer: { name: 'Claude (okt agent)', email: 'claude@okt' }, pins: [bindLib.fingerprint(hostBlob)] };
+        /*
+         * the agent identity the phone keeps (lib SPEC H7): the record `edge setup` makes - its certificate made on
+         * this key (two signatures, a press each) - handed to the agent's start, which makes none itself
+         */
+        const openpgp = ctx.requireLib('node-onlykey-lib/crypto/pgp');
+        const uid = 'Claude (okt agent) <claude@okt>';
+        const made = await ctx.requireLib('node-onlykey-lib/keychain').cert.makeCertificate(okcrypto, openpgp, { label: uid, version: 2, expires: 0, onPress: pressSoon });
+        const identity = {
+          ssh: 'ssh://claude@okt', gpgUid: uid, committer: { name: 'Claude (okt agent)', email: 'claude@okt' }, expires: 0,
+          cert: { armored: made.armored, fingerprint: made.fingerprint, created: made.created, expires: made.expires, signPublic: Buffer.from(made.signPublic).toString('hex') },
+        };
         svc = await startEdgeAgent({
-          okcrypto, client: c, edge: edgeSvc, config, openpgp: ctx.requireLib('node-onlykey-lib/crypto/pgp'),
+          okcrypto, client: c, edge: edgeSvc, identity, pins: [bindLib.fingerprint(hostBlob)], openpgp,
           shimCommand: ctx.resolveLib('node-onlykey-lib/edge/cli/gpg-shim').split(path.sep).join('/'),
-          log, confirm: pressSoon, /* the certificate's two signatures, and any plain sign: a press */
+          log, confirm: pressSoon, /* any plain sign: a press */
         });
         log(`ssh key: ${svc.sshLine}`);
-        assert.ok(svc.fingerprint, 'the agent\'s PGP certificate was made');
+        assert.equal(svc.fingerprint, made.fingerprint, 'the agent serves the certificate made on this key');
         const lastLink = async () => { const h = await edgeSvc.head(); return chain.decodeLink((await edgeSvc.pickup(h.seq, 1))[0].link); };
         const run = async (args) => { const lines = []; const code = await commands.main(args, { out: (s) => lines.push(s), err: (s) => lines.push(`ERR ${s}`), ask: control.ask }); log(lines.join(' | ')); return { code, lines }; };
 
