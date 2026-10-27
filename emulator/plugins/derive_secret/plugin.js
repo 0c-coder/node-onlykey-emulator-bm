@@ -11,9 +11,11 @@
  * secret and another site the key trusts cannot reach this one's.
  *
  * Carried by the WebAuthn tunnel, which every host can speak (a browser, the desktop app, the phone, the CLI over
- * CTAPHID). opt1 = 128, the slot the firmware already lets through at the default webcrypt level. The confirmation is
- * the firmware's own derive gate (web_agent_derive_gate): touch asks for the challenge code at least; touchless asks
- * nothing unless the key-wide setting (field 30) adds a press. The gate holds the one request open while it waits.
+ * CTAPHID). opt1 = 128, the slot the firmware already lets through at the default webcrypt level. Touch goes through the
+ * firmware's own derive gate (web_agent_derive_gate) with the challenge code as its floor - the key-wide derive setting
+ * (field 30) picks code or press; the gate holds the one request open while it waits. Touchless never asks: field 30
+ * defaults to the challenge code, so a touchless request that obeyed it would ask on every key left at the default,
+ * and touchless is a mode of its own - its secrets are other keys, opened only by touchless requests.
  *
  * It needs no other plugin: it answers for any site the key already accepts (apps.crp.to natively, ctap_bridge's site
  * when that plugin is in). Stateless: no storage of its own, so it does not move a soft key to another slot.
@@ -36,8 +38,8 @@ module.exports = {
       text: '                    } else if (cmd == OKDERIVESECRET && opt1 == RESERVED_KEY_WEB_AGENT_DERIVATION) {\n'
         + '                        large_buffer_offset = 0;\n'
         + '                        outputmode = WEBAUTHN;\n'
-        + '                        if (okplugin_derive_secret_mode(recv_buffer) == DS_TOUCH || okplugin_derive_secret_mode(recv_buffer) == DS_TOUCHLESS) {\n'
-        + '                            int g = web_agent_derive_gate(okplugin_derive_secret_mode(recv_buffer) == DS_TOUCH ? USER_INPUT_CHALLENGE : USER_INPUT_NONE, recv_buffer + 7, DS_PAYLOAD_LEN);\n'
+        + '                        if (okplugin_derive_secret_mode(recv_buffer) == DS_TOUCH) {\n'
+        + '                            int g = web_agent_derive_gate(USER_INPUT_CHALLENGE, recv_buffer + 7, DS_PAYLOAD_LEN);\n'
         + '                            if (g) return g;\n'
         + '                        }\n'
         + '                        okplugin_derive_secret(recv_buffer, _appid);\n',

@@ -11,7 +11,7 @@ request and changes no existing behaviour.
 |---|---|---|
 | fido2/ok_extension.cpp | after `#include "onlykey.h"` | the plugin header |
 | fido2/solo.cpp | after `case OKSIGN:` | `case (TYPE_INIT \| 0x7C):` - the extension forwards OKDERIVESECRET to the key (solo.cpp does not include onlykey.h, so the wire value) |
-| fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKDERIVESECRET` with opt1 = 128: the base's own derive gate (`web_agent_derive_gate`) - touch asks for the challenge code at least, touchless asks nothing unless the key-wide setting adds a press - then `okplugin_derive_secret` |
+| fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKDERIVESECRET` with opt1 = 128: touch goes through the base's own derive gate (`web_agent_derive_gate`, the challenge code as its floor; field 30 picks code or press); touchless asks nothing; then `okplugin_derive_secret` |
 
 ## What it answers
 
@@ -28,8 +28,10 @@ after the connect), slot 128, payload `[mode][SHA-256(label)]`, 33 bytes in one 
   site cannot derive another site's secret).
 - **The gate:** the request reaches the plugin only from a site the key already accepts (`webcryptcheck`), only over
   a transit session (unlocked), and only for slot 128 - the slot the base lets through at the default webcrypt level.
-  The confirmation is the base's: the code is bytes 0/15/31 of SHA-256(the 33-byte payload), mod 6 (mod 3 on a DUO)
-  plus one; the request is held open while the key waits (`CTAP2_UP_DELAY_MS`).
+  Touch: the base's confirmation - the code is bytes 0/15/31 of SHA-256(the 33-byte payload), mod 6 (mod 3 on a DUO)
+  plus one (or a press, if field 30 says press); the request is held open while the key waits (`CTAP2_UP_DELAY_MS`).
+  Touchless: no confirmation, whatever field 30 says - field 30 defaults to the code, and a touchless mode that obeyed
+  it would ask on every key at the default. Its secrets are separate keys, reached only by touchless requests.
 
 ## Stored
 
