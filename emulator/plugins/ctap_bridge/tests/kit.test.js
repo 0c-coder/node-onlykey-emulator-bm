@@ -56,7 +56,12 @@ module.exports = function register({ it }, ctx) {
       };
       const opts = { confirm, timeoutMs: 60000 };
       const bucketKey = await bid.deriveBucketKey(okcrypto, publicKey, opts);
-      log('bucket key made (agent X25519 ECDH over the tunnel)');
+      const hex = (b) => Buffer.from(b).toString('hex');
+      /* what a firmware change to X25519 (patch 0014) would move: these, compared across builds on one key */
+      log(`bucket key made (agent X25519 ECDH over the tunnel): public ${hex(bucketKey.publicKey).slice(0, 16)}`);
+      const x25519 = await okcrypto.agent.publicKey(ctx.requireLib('node-onlykey-lib/bucket').bucketIdentity.KEY_LABEL
+        ? require('crypto').createHash('sha256').update(bid.KEY_LABEL).digest() : new Uint8Array(32), { keyType: 4 });
+      log(`agent X25519 public key (the bucket key's peer label): ${hex(x25519).slice(0, 16)}`);
       before = device.log.count(PRIMED);
       const certificate = await bid.certify(okcrypto, publicKey, bucketKey.publicKey, opts);
       assert.ok(bid.verifyCertificate({ identityPublicKey: publicKey, bucketPublicKey: bucketKey.publicKey, certificate }),
