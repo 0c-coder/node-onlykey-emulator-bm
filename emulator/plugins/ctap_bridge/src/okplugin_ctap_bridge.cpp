@@ -52,10 +52,30 @@ int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code) {
   return 0;
 }
 
+/*
+ * The request's rpId when no hash is handed in: a CTAP2 getAssertion (extend_fido2 passes no appid), read from the
+ * request itself as webcryptcheck reads it - command 0x02, then the map's key 1, a CBOR text string. The text header is
+ * one byte for a name under 24 characters and two (0x78, length) up to 255; the allowed site may be either.
+ * Its length into *len, a pointer to the name; NULL when the request is not a getAssertion with an rpId first.
+ */
+static const uint8_t *cb_request_rpid(int *len) {
+  extern uint8_t ctap_buffer[];
+  if (ctap_buffer[0] != 0x02 || ctap_buffer[2] != 0x01) return NULL;
+  uint8_t hdr = ctap_buffer[3];
+  if ((hdr & 0xE0) == 0x60 && (hdr & 0x1F) < 24) { *len = hdr & 0x1F; return ctap_buffer + 4; }
+  if (hdr == 0x78) { *len = ctap_buffer[4]; return ctap_buffer + 5; }
+  return NULL;
+}
+
 int okplugin_ctap_bridge_site(const uint8_t *appid) {
   char site[CB_SITE_MAX + 1];
   int len;
-  if (!appid || !cb_on() || !(len = cb_site(site))) return 0;
+  if (!cb_on() || !(len = cb_site(site))) return 0;
+  if (!appid) {
+    int n = 0;
+    const uint8_t *name = cb_request_rpid(&n);
+    return name && n == len && memcmp(name, site, (size_t)len) == 0;
+  }
   uint8_t hash[32];
   SHA256_CTX ctx;
   sha256_init(&ctx);

@@ -19,7 +19,7 @@ apps.onlykey.io / apps.crp.to).
 | fido2/ok_extension.cpp | before the stored-key gate `if (wc_level < 2 && opt1 != RESERVED_KEY_WEB_AGENT_DERIVATION)` | `if (!okplugin_ctap_bridge_allows(cmd, opt1))` - an allowed agent code skips the gate |
 | fido2/ok_extension.cpp | before `} else if (cmd == OKSIGN) {` in the packet loop | `OKGETPUBKEY` for an allowed code: the key type from the first payload byte (the tunnel puts its last-packet length in byte 6), the agent key derived with the base's `okcrypto_derive_key` exactly as `okcrypto_getpubkey` does for 132 / 232, and the reply SEALED with the tunnel's transit key (the base sends agent public keys unsealed, right for USB, not for the tunnel) |
 | fido2/device.cpp | after `#include "onlykey.h"` | the plugin header |
-| fido2/device.cpp | before `if (origin_ok && !(wc_policy & OKWC_DISABLE_EXT))` in `webcryptcheck` | the site set in config mode counts as a trusted origin |
+| fido2/device.cpp | before `if (origin_ok && !(wc_policy & OKWC_DISABLE_EXT))` in `webcryptcheck` | the site set in config mode counts as a trusted origin: by its SHA-256 when an rpId hash is handed in (U2F), else by name from the request itself - a CTAP2 getAssertion, where `extend_fido2` hands in none (fixed 2026-10-27: the check compared against that NULL hash and so never matched on CTAP2; DEBUG builds hid it by trusting every origin) |
 
 ## What it lets through, and only when on
 
