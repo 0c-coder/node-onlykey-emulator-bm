@@ -20,9 +20,7 @@ module.exports = function register({ it }, ctx) {
   const derivedThrough = async (device, opts) => {
     const { lib, okcrypto } = await ctx.kit.webenv.browserLib(device, opts);
     try {
-      /* resolves { status, payload, publicKey } (node-onlykey-lib okcrypto derive) */
-      const { publicKey } = await okcrypto.derivePublicKey(LABEL);
-      return Buffer.from(publicKey).toString('hex');
+      return Buffer.from(await okcrypto.derivePublicKey(LABEL)).toString('hex');
     } finally {
       await lib.destroy();
     }
