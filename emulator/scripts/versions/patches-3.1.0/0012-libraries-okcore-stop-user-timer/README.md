@@ -49,23 +49,8 @@ wrong challenge) are unchanged; they leave the timer running as before.
 
 ## 3. The test
 
-**The test that ships with this patch:** `tests/kit.test.js`, beside this README. It is strict: it FAILS on 3.1.0 as
-released and PASSES with the patch - the failure shows the bug, the pass shows the fix. It runs in onlykey-testing
-(github.com/bm-ok/onlykey-testing), section 09-patches, on an emulator or a DEBUG developer key:
-
-    OKT_PATCHES=0012 OKT_PATCHES_DIR=<this patch's parent folder> node bin/okt.js run 09-patches
-    OKT_PATCHES=0012 OKT_PATCHES_DIR=<this patch's parent folder> node bin/okt.js run 09-patches --hardware
-
-**Measured 2026-10-28** (Linux, two DEBUG emulators built from one node-onlykey-emulator commit, ok-edge
-`tools/box/patch-proof.sh`):
-
-| firmware | result |
-|---|---|
-| 3.1.0 as released | FAIL - request B is answered "Timeout occured while waiting for confirmation on OnlyKey" before it can be pressed |
-| 3.1.0 + 0012 + 0013 + 0015 | pass |
-
-What the test does (it was this fix's plugin test while the fix was staged as the emulator plugin `fix_usertimeout`, then
-onlykey-testing `01-protocol/42-user-timer`):
+onlykey-testing `01-protocol/42-user-timer.test.js` (it was this fix's plugin test while the fix was staged as the
+emulator plugin `fix_usertimeout`):
 
 1. Request A, a two-packet `OKSIGN`, is primed and pressed.
 2. Request B's first packet is sent 19 s after A's prime. Its last packet is sent once the emulator's DEBUG console

@@ -45,21 +45,6 @@ okeeprom_eeset_rsakey(&no_key, (int)buffer[5]);
 
 ## 3. The test
 
-**The test that ships with this patch:** `tests/kit.test.js`, beside this README. It is strict: it FAILS on 3.1.0 as
-released and PASSES with the patch - the failure shows the bug, the pass shows the fix. It runs in onlykey-testing
-(github.com/bm-ok/onlykey-testing), section 09-patches, on an emulator or a DEBUG developer key:
-
-    OKT_PATCHES=0013 OKT_PATCHES_DIR=<this patch's parent folder> node bin/okt.js run 09-patches
-    OKT_PATCHES=0013 OKT_PATCHES_DIR=<this patch's parent folder> node bin/okt.js run 09-patches --hardware
-
-**Measured 2026-10-28** (Linux, two DEBUG emulators built from one node-onlykey-emulator commit, ok-edge
-`tools/box/patch-proof.sh`):
-
-| firmware | result |
-|---|---|
-| 3.1.0 as released | FAIL - the wiped RSA slot still publishes a modulus (its key type was left set) |
-| 3.1.0 + 0012 + 0013 + 0015 | pass |
-
 `rsa_wipe_check.py` (python-onlykey client; `onlykey-cli` has no public-key read, sign or decrypt command):
 
 1. Load a throwaway RSA-2048 key into RSA4 (config mode, `onlykey-cli setkey RSA4 2 s <p||q>`), replug, unlock, read
@@ -70,7 +55,8 @@ Before the fix the wiped slot publishes another modulus (no key; its small prime
 fix it answers "Error no RSA Private Key set in this slot". Recorded at 8d28305, before and after, on emulator builds;
 the code it touches is the same at `fe9e293`.
 
-**In the kit:** `tests/kit.test.js` above (until 2026-10-28 a branch of onlykey-testing `01-protocol/19-rsa-keys`, which
-now asserts only what every build does: the wipe is acknowledged and the old key is gone).
+**In the kit:** onlykey-testing `01-protocol/19-rsa-keys.test.js`, "OKWIPEPRIV clears an RSA slot": with the fix (an
+emulator staging 0013, or a hard key flashed with it and `OKT_FIRMWARE_FIXES=0013`) the wiped slot must read as empty;
+without it the stale type is pinned as the shipped behaviour.
 
 **On `fe9e293` (2026-10-26):** passes on developer hard key 2 (Tim's pins + 0012 + 0013, the whole kit 178/0) and on the DEBUG emulator staging 0012 + 0013: "after the wipe: Error no RSA Private Key set in this slot".

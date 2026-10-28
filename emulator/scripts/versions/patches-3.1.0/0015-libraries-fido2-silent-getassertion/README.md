@@ -48,33 +48,17 @@ before. This is what the non-extension path already does (`device_disable_up(GA.
 
 ## 3. The test
 
-**The test that ships with this patch:** `tests/kit.test.js`, beside this README. It is strict: it FAILS on 3.1.0 as
-released and PASSES with the patch - the failure shows the bug, the pass shows the fix. It runs in onlykey-testing
-(github.com/bm-ok/onlykey-testing), section 09-patches, on an emulator or a DEBUG developer key:
-
-    OKT_PATCHES=0015 OKT_PATCHES_DIR=<this patch's parent folder> node bin/okt.js run 09-patches
-    OKT_PATCHES=0015 OKT_PATCHES_DIR=<this patch's parent folder> node bin/okt.js run 09-patches --hardware
-
-**Measured 2026-10-28** (Linux, two DEBUG emulators built from one node-onlykey-emulator commit, ok-edge
-`tools/box/patch-proof.sh`):
-
-| firmware | result |
-|---|---|
-| 3.1.0 as released | FAIL - the sign behind the silent check is never answered: "transit authentication failed or a stale reply was returned" |
-| 3.1.0 + 0012 + 0013 + 0015 | pass |
-
-Earlier, in onlykey-testing `01-protocol/43-silent-check` (`lib/webenv.js`'s `silentCheck` - the kit's browser sending
-what Windows sends), it read the agent public key the web app reads as its bucket identity, once plainly and once behind
-a silent check (that read needs the ctap_bridge plugin; the test that ships uses the released firmware's own stored-key
-sign instead):
+onlykey-testing `test/01-protocol/43-silent-check.test.js`, with `lib/webenv.js`'s `silentCheck` - the kit's browser
+sending what Windows sends. It reads the agent public key the web app reads as its bucket identity (a tunnel request
+with data), once plainly and once behind a silent check:
 
 | build | plain | silent check first (Windows) |
 |---|---|---|
 | emulator, 0012 + 0013 | `7944e60dbc5532b5` | fails: "transit authentication failed or a stale reply was returned" |
 | emulator, 0012 + 0013 + 0015 | `70a95f95161b85a8` | `70a95f95161b85a8` - the same |
 
-(A new build is a new fixture key, so the two builds' identities differ.) That earlier test recorded the bug and
-passed without the fix; the one that ships (above) fails without it.
+(A new build is a new fixture key, so the two builds' identities differ.) Without the fix the test records the bug and
+passes; with it, both reads must agree.
 
 With the fix, the kit's FIDO and WebAuthn tests (09, 11-18, 23, 24, 26, 29, 30, 32, 33, the plugin tests, 43):
 emulator 89 passed / 0 failed; developer hard key (fe9e293 + 0012 + 0013 + 0015, edge + ctap_bridge, DEBUG) 79 passed /
