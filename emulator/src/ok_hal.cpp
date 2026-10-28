@@ -330,6 +330,9 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
     return -1;
   }
   okemu_flash_base = (uintptr_t)fp;
+  if (getenv("OKEMU_TRACE_MAP"))
+    fprintf(stderr, "[okemu] flash mapped at %p (%lu KB)\n",
+            fp, (unsigned long)(OKEMU_FLASH_SIZE / 1024));
 #endif /* _WIN32 */
   g.flash = (uint8_t *)OKEMU_FLASH_BASE;
   g.flash_mapped_off = off;
