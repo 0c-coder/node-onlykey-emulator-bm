@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <stdlib.h>
+#include <mutex>
 #include "ok_hal.h"
 
 /*
@@ -94,8 +95,22 @@ volatile uint32_t systick_millis_count = 0;
  * arithmetic in SoftTimerClass::testAndCall(). Signed difference so the
  * comparison stays correct across the 32-bit wrap, exactly as the firmware's
  * own millis() comparisons do.
+ *
+ * THE CHECK AND THE WRITE ARE ONE STEP, under a lock. Unlocked, the two threads
+ * raced (ThreadSanitizer, 2026-10-28: 366 reports here in two kit runs of
+ * 10-backup-restore): one reads the clock and checks, the other writes a newer
+ * value, the first then writes its older one - and millis() steps BACK, the very
+ * thing the rule above exists to prevent. The firmware's SoftTimer tasks, the
+ * LED fades among them, then fire early or late. A plain std::mutex, not an
+ * atomic compare-exchange: the same code on gcc, NDK clang and MSVC, and the
+ * callers are already throttled (micros(), every 250 us at most). The
+ * firmware's own reads of the counter stay unlocked, as on the Teensy, where
+ * an aligned 32-bit load is one instruction.
  */
+static std::mutex g_systick_mu;
+
 void okemu_sync_systick(void) {
+  std::lock_guard<std::mutex> lk(g_systick_mu);
   const uint32_t ms = okemu_millis(); /* not okemu_micros()/1000: that froze at 71.6 min (ok_hal.cpp) */
   if ((int32_t)(ms - systick_millis_count) > 0) systick_millis_count = ms;
 }
