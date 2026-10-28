@@ -843,7 +843,9 @@ module.exports = function register({ it }, ctx) {
         log(`${c.name}: #${f.seq} decision ${f.decision} slot ${f.slot} subject ${Buffer.from(f.subject).toString('hex').slice(0, 16)} lib ${Buffer.from(subject).toString('hex').slice(0, 16)}`);
         assert.equal(JSON.stringify([f.op, f.decision, f.slot, f.grantId]), JSON.stringify([c.op, SELF_PRESS, c.slot, b.grantId]), `${c.name}: not a self-press under the budget`);
         assert.bytes(Buffer.from(f.subject), Buffer.from(subject), `${c.name}: the firmware's subject is not the library's requestSubject`);
-        assert.ok(c.check(out), `${c.name}: the result does not check out`);
+        /* what came back, in the failure itself: a wrong result is diagnosed from the bytes (GitHub run 40627579932
+           failed here once, on ECC slot 101, with nothing to read but this line) */
+        assert.ok(c.check(out), `${c.name}: the result does not check out - ${out.length} of ${c.want} bytes: ${ctx.okmsg.text(out) || out.toString('hex').slice(0, 64)}`);
         await receipt(device, f.seq, `okt: ${c.name}`, { signal });
       }
       await edge(device, GRANT_REVOKE, u32(b.grantId), { signal, text: true });
