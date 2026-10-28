@@ -1372,14 +1372,20 @@ module.exports = function register({ it }, ctx) {
         assert.equal(h.seq === null ? SEQ_NONE : h.seq, usb.seq, 'HEAD over WebAuthn: another seq than over USB');
         assert.bytes(Buffer.from(h.head), Buffer.from(usb.head), 'HEAD over WebAuthn: another head than over USB');
 
-        /* a budget at a press: one agent sign (code 222) for the test identity; pressed once the key has primed it */
-        const primed = device.log.count(PRIMED);
+        /*
+         * a budget at a press: one agent sign (code 222) for the test identity. The press lands once the key is waiting:
+         * an Edge press prints no "Encrypted Buffer" (that is a sign's), so the cue is the grant's own seed - its
+         * "Generating random number" - and then the USB test's 800 ms (edge(), press: true)
+         */
+        const SEEDED = /Generating random number of size = 32/g;
+        const seeded = device.log.count(SEEDED);
         const g = await web.grant({
           scopes: [{ op: OP_SIGN, slot: 222, cap: 1, label: OKT_LABEL }],
           reasonHash: new Uint8Array(sha256(Buffer.from('okt: edge over webauthn'))),
           verifiedHead: h.head,
           onPress: () => {
-            device.log.waitForCount(PRIMED, primed + 1, { timeoutMs: 20000, signal }).then(() => device.press(1), () => {});
+            device.log.waitForCount(SEEDED, seeded + 1, { timeoutMs: 20000, signal })
+              .then(() => device.sleep(800, { signal })).then(() => device.press(1), () => {});
           },
         });
         log(`budget #${g.grantId} (${g.uses} use) at #${g.seq}; checkpoint #${g.checkpoint.seq}`);
