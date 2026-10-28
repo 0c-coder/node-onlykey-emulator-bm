@@ -7,6 +7,8 @@
  *   ./emulator/bin/press.js 1:press        types slot 1's b profile
  *   ./emulator/bin/press.js 1:hold         button 1's gesture (a backup)
  *   ./emulator/bin/press.js --watch        no presses, just stream LED + debug
+ *   ./emulator/bin/press.js --after='Generating random number of size = 32' 1
+ *                                          press once the key is waiting (below)
  *
  * Modes, not ticks - see lib/press-modes.js. A press is named by what it
  * means (tap / press / hold); this tool never sends a duration.
@@ -40,12 +42,15 @@ function usage(msg) {
   --socket=P  socket path (default: $XDG_RUNTIME_DIR/onlykey-emulator.sock)
   --wait=MS   how long to wait for the emulator to dial in (default 8000)
   --quiet     suppress LED and debug output
+  --after=RE  hold the presses until a debug line matches RE (a test build's
+              cue that the key is waiting), then 800 ms, then press
+  --after-timeout=MS  how long to wait for that line (default 60000)
 `);
   process.exit(msg ? 2 : 0);
 }
 
 /* ------------------------------------------------------------------ args */
-const opts = { watch: false, quiet: false, wait: 8000, socketPath: undefined, mode: 'tap' };
+const opts = { watch: false, quiet: false, wait: 8000, socketPath: undefined, mode: 'tap', after: null, afterTimeout: 60000 };
 const presses = [];
 
 for (const arg of process.argv.slice(2)) {
@@ -55,6 +60,8 @@ for (const arg of process.argv.slice(2)) {
   else if (arg.startsWith('--socket=')) opts.socketPath = arg.slice(9);
   else if (arg.startsWith('--wait=')) opts.wait = Number(arg.slice(7));
   else if (arg.startsWith('--mode=')) opts.mode = arg.slice(7);
+  else if (arg.startsWith('--after=')) opts.after = new RegExp(arg.slice(8));
+  else if (arg.startsWith('--after-timeout=')) opts.afterTimeout = Number(arg.slice(16));
   else if (arg.startsWith('-')) usage(`unknown option ${arg}`);
   else {
     /* N or N:mode. */
@@ -116,12 +123,46 @@ host.once('ready', () => {
    * entered with host-side delay between digits is the documented way to get
    * this wrong - this is what keeps that delay at zero.
    */
-  for (const p of presses) host.press(p.button, p.mode);
+  const send = () => {
+    for (const p of presses) host.press(p.button, p.mode);
+    if (presses.length) {
+      const shown = presses.map((p) => `${p.button}:${p.mode}`).join(' ');
+      console.error(`press: sent ${shown}`);
+    }
+  };
 
-  if (presses.length) {
-    const shown = presses.map((p) => `${p.button}:${p.mode}`).join(' ');
-    console.error(`press: sent ${shown}`);
+  /*
+   * --after: A PRESS ONLY ONCE THE KEY IS WAITING. A press the firmware is not
+   * waiting for is not kept for later: an unlocked key acts on it as an
+   * ordinary button (button 1 types slot 1), and the request it was meant for
+   * then waits out its timeout. Over the WebAuthn tunnel a request reaches the
+   * key seconds after the page says "press" (each ceremony ~5 s on the box).
+   * So the press waits for the request's own debug line on a test build (the
+   * kit's Edge-over-WebAuthn test: a grant's seed, "Generating random number of
+   * size = 32"), then the 800 ms the kit's USB presses wait.
+   */
+  if (opts.after) {
+    let buf = '';
+    const give = setTimeout(() => {
+      console.error(`press: never saw /${opts.after.source}/ within ${opts.afterTimeout}ms - nothing pressed`);
+      host.close();
+      process.exit(1);
+    }, opts.afterTimeout);
+    const onLog = (m) => {
+      buf = (buf + m.text).slice(-4096);
+      if (!opts.after.test(buf)) return;
+      host.off('log', onLog);
+      clearTimeout(give);
+      setTimeout(() => {
+        send();
+        setTimeout(() => { host.close(); process.exit(0); }, 400 + 250 * presses.length);
+      }, 800);
+    };
+    host.on('log', onLog);
+    return;
   }
+
+  send();
 
   if (opts.watch) return;              /* stay up and keep streaming */
 
