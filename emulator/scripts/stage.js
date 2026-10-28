@@ -858,12 +858,12 @@ const PATCHES = [
      * makes the soft key a usable device rather than a protocol toy.
      *
      * The firmware addresses its own storage through absolute pointers at the
-     * MK20DX256's real addresses, from 0. On Linux the HAL maps the flash array
-     * at address 0 and that works as written, so node-linux is left alone
-     * (ok_hal.h defines OKEMU_FLASH_BASE as 0 there, but nothing force-includes
-     * it into okcore.h's consumers).
-     *
-     * Elsewhere the bottom of the address space is not available:
+     * MK20DX256's real addresses, from 0. The bottom of the address space is
+     * not available to an ordinary process anywhere:
+     *   - Linux maps address 0x1000 and up only with vm.mmap_min_addr lowered
+     *     from its default 65536 - a machine-wide sysctl a user's computer
+     *     should not need for the soft key, and at the default certified_hw at
+     *     0x5BB0 is unmapped and the first AES-GCM operation faults.
      *   - Windows reserves the bottom 64 KB of every process, cannot be
      *     persuaded otherwise, and the next rung up leaves certified_hw at
      *     0x5BB0 unmapped, which faults on the first AES-GCM operation. There
@@ -883,7 +883,7 @@ const PATCHES = [
      * unlike the uintptr_t fixes, this one genuinely is emulator-specific and
      * must NOT change the device build.
      */
-    targets: ['node-win32', 'android'],
+    targets: ['node-linux', 'node-win32', 'android'],
     file: 'libraries/onlykey/okcore.h',
     edits: [
       /*

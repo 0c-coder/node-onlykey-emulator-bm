@@ -28,11 +28,15 @@ extern "C" {
 /* ---------------------------------------------------------------- layout */
 
 /*
- * Where the emulated flash array lives.
+ * Where the emulated flash array lives - on every platform, wherever the
+ * kernel puts it.
  *
- * On Linux it is the MK20DX256's real address, 0, so the firmware's own
- * constants (fwstartadr 0x6060, certified_hw 0x5BB0, storage 0x3A800) are
- * correct exactly as written and nothing needs rebasing.
+ * The MK20DX256's real address is 0, and the firmware's own constants
+ * (fwstartadr 0x6060, certified_hw 0x5BB0, storage 0x3A800) assume it. On
+ * Linux that address is reachable only with vm.mmap_min_addr lowered to 4096
+ * (the default, 65536, leaves certified_hw unmapped and the first AES-GCM
+ * operation faults), a machine-wide setting no app should need. So Linux is
+ * relocated as Windows and Android are, and runs as the machine is set up.
  *
  * Windows reserves the bottom 64 KB of every process's address space as the
  * null-pointer guard, with no equivalent of vm.mmap_min_addr to lower - so
@@ -53,15 +57,9 @@ extern "C" {
  * CMakeLists also passes -DOKEMU_FLASH_BASE=okemu_flash_base, so the #ifndef
  * lets a build system name the base and this header agrees with it.
  */
-#if defined(_WIN32) || defined(__ANDROID__)
 extern uintptr_t okemu_flash_base;
-#endif
 #ifndef OKEMU_FLASH_BASE
-#if defined(_WIN32) || defined(__ANDROID__)
 #define OKEMU_FLASH_BASE   okemu_flash_base
-#else
-#define OKEMU_FLASH_BASE   0x00000000UL
-#endif
 #endif
 #define OKEMU_FLASH_SIZE   0x00040000UL   /* 256 KB - MK20DX256 */
 

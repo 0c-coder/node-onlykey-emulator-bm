@@ -87,7 +87,7 @@ typedef unsigned int uint;
 #endif /* _WIN32 */
 
 /*
- * Where the emulated flash array lives, on Windows and Android.
+ * Where the emulated flash array lives, on every platform.
  *
  * OKEMU_FLASH_BASE is the NAME OF THIS VARIABLE, not an address - the kernel
  * chooses where the 256 KB lands and okemu_hal_init() records it. stage.js
@@ -100,9 +100,10 @@ typedef unsigned int uint;
  * neither file depends on the other having been included first. The Android
  * CMakeLists passes the same definition with -D, hence the #ifndef.
  *
- * Node on Linux maps the array at its real address (0) and needs neither.
+ * Node on Linux once mapped the array at its real address (0), which needed
+ * vm.mmap_min_addr lowered to 4096 on the host; it is relocated as Windows and
+ * Android are, so a Linux machine runs the soft key as it is set up.
  */
-#if defined(_WIN32) || defined(__ANDROID__)
 #include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
@@ -114,7 +115,6 @@ extern uintptr_t okemu_flash_base;
 #ifndef OKEMU_FLASH_BASE
 #define OKEMU_FLASH_BASE okemu_flash_base
 #endif
-#endif /* _WIN32 || __ANDROID__ */
 
 #ifdef _WIN32
 

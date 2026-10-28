@@ -27,16 +27,14 @@
 #include <string>
 #include <vector>
 
-#if defined(_WIN32) || defined(__ANDROID__)
 /*
  * Where the flash array landed. Declared in ok_hal.h, which every
  * firmware translation unit reaches, because okcore.h's rebased address
  * constants name it and okcore.h includes nothing of ours. Zero until
- * okemu_hal_init() has mapped the file. Windows and Android both let the
- * kernel choose the address; node on Linux maps at the real address, 0.
+ * okemu_hal_init() has mapped the file. Every platform lets the kernel
+ * choose the address.
  */
 extern "C" uintptr_t okemu_flash_base = 0;
-#endif
 
 namespace {
 
@@ -229,26 +227,17 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
    * okemu_map_peripherals() during module load. There is no mapping left
    * that could fail, and so no error to surface here. */
 
-  /* 2. flash array, file-backed at its real address -------------------
+  /* 2. flash array, file-backed, wherever the kernel puts it -----------
    *
    * The firmware reads its own storage through raw pointers, and fw_hash()
-   * walks from fwstartadr (0x6060). Mapping from 0 needs mmap_min_addr to be
-   * lowered (or CAP_SYS_RAWIO). If we cannot, we still map everything from
-   * mmap_min_addr up - which covers the whole storage area at 0x3A800 - and
-   * mark the device as already provisioned so the one-time block that calls
-   * fw_hash() never runs.
+   * walks from fwstartadr (0x6060). Its address constants are rebased onto
+   * OKEMU_FLASH_BASE (scripts/stage.js), so the whole 256 KB maps at the
+   * address the kernel chooses and the firmware's layout is unchanged.
    */
   char e2[256];
   g.flash_fd = open_backing(g.dir, "flash.bin", OKEMU_FLASH_SIZE, 0xFF, e2, sizeof e2);
   if (g.flash_fd < 0) { snprintf(err, errlen, "%s", e2); return -1; }
 
-  /*
-   * mmap() treats addr==0 as "no hint" and picks an address of its own, even
-   * with MAP_FIXED_NOREPLACE - so a request for base 0 can "succeed" somewhere
-   * else entirely. Every mapping below is therefore checked against the
-   * address we asked for, and anything else is unmapped and treated as a
-   * failure.
-   */
 #ifdef _WIN32
   /*
    * WINDOWS PICKS THE ADDRESS AND WE TELL THE FIRMWARE WHICH.
@@ -306,7 +295,7 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
       fprintf(stderr, "[okemu] flash mapped at %p (%lu KB)\n",
               wfp, (unsigned long)(OKEMU_FLASH_SIZE / 1024));
   }
-#elif defined(__ANDROID__)
+#else
   /*
    * THE KERNEL PICKS THE ADDRESS. We only have to tell the firmware which.
    *
@@ -321,7 +310,10 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
    * so the firmware could not start at all, and fallbacks cannot help
    * because they are offsets INSIDE the array and land in the same range.
    * Android also forbids the real address: vm.mmap_min_addr is 0x8000 and an
-   * unprivileged app cannot lower it, while certified_hw sits at 0x5BB0.
+   * unprivileged app cannot lower it, while certified_hw sits at 0x5BB0. Linux
+   * forbids it by default too (65536); only a machine-wide sysctl lowers it.
+   * Android's arm64 and Linux's x64 are both LP64, so the firmware's
+   * `unsigned long` addresses hold any address the kernel returns.
    *
    * Asking for NULL removes the bet. The firmware never sees the difference:
    * its address constants are all OKEMU_FLASH_BASE + offset (scripts/stage.js
@@ -338,60 +330,6 @@ int okemu_hal_init(const char *storage_dir, char *err, size_t errlen) {
     return -1;
   }
   okemu_flash_base = (uintptr_t)fp;
-#else
-  bool low_mapped = true;
-  size_t off = 0;
-  void *fp = mmap((void *)OKEMU_FLASH_BASE, OKEMU_FLASH_SIZE,
-                  PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED_NOREPLACE,
-                  g.flash_fd, 0);
-  if (fp != MAP_FAILED && (uintptr_t)fp != OKEMU_FLASH_BASE) {
-    munmap(fp, OKEMU_FLASH_SIZE);
-    fp = MAP_FAILED;
-  }
-  if (fp == MAP_FAILED) {
-    /*
-     * vm.mmap_min_addr blocks the bottom of the address space, so walk up
-     * until something sticks. How far we get decides what works:
-     *
-     *   0x0000  everything, including fw_hash()'s walk from fwstartadr.
-     *   0x1000  enough for real use. The firmware's own key material lives
-     *           here - certified_hw is enckeysectoradr+432 = 0x5BB0 - and
-     *           okcrypto_split_sundae() dereferences it on EVERY AES-GCM
-     *           operation, so without this the device segfaults the moment it
-     *           encrypts anything (e.g. storing a PIN). 4096 is the useful
-     *           setting: it still leaves page 0 unmapped, so genuine NULL
-     *           dereferences fault exactly as they should.
-     *   0x10000 the unprivileged default. Storage at 0x3A800 is reachable and
-     *           the device boots, but any crypto that touches certified_hw
-     *           will crash. Usable only for HID/protocol work.
-     */
-    static const size_t kFallbacks[] = { 0x1000, 0x10000 };
-    for (size_t i = 0; i < sizeof kFallbacks / sizeof *kFallbacks; i++) {
-      off = kFallbacks[i];
-      fp = mmap((void *)(OKEMU_FLASH_BASE + off), OKEMU_FLASH_SIZE - off,
-                PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED_NOREPLACE,
-                g.flash_fd, (off_t)off);
-      if (fp != MAP_FAILED && (uintptr_t)fp == OKEMU_FLASH_BASE + off) break;
-      if (fp != MAP_FAILED) { munmap(fp, OKEMU_FLASH_SIZE - off); fp = MAP_FAILED; }
-    }
-    if (fp == MAP_FAILED) {
-      snprintf(err, errlen,
-               "cannot map flash: %s - lower vm.mmap_min_addr "
-               "(sudo sysctl -w vm.mmap_min_addr=4096)", strerror(errno));
-      return -1;
-    }
-    low_mapped = false;
-
-    if (off > 0x5BB0UL) {
-      fprintf(stderr,
-              "[okemu] WARNING: flash mapped from %#lx; the firmware's key "
-              "material at 0x5BB0 (certified_hw) is NOT mapped.\n"
-              "[okemu]          Crypto operations will crash. Run "
-              "scripts/setup-permissions.sh, or:\n"
-              "[okemu]          sudo sysctl -w vm.mmap_min_addr=4096\n",
-              (unsigned long)off);
-    }
-  }
 #endif /* _WIN32 */
   g.flash = (uint8_t *)OKEMU_FLASH_BASE;
   g.flash_mapped_off = off;
