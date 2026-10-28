@@ -87,7 +87,7 @@ receipt owed, `0D` nothing to pay, `12` bad range, `1C` not the request its TX s
 ## Tests
 
 The plugin kit, `tests/kit.test.js`, on the desktop emulator (`onlykey-testing`, test
-`01-protocol/38-softkey-plugins.test.js`; 24 pass, 0 fail, 1 skip on 2026-10-10):
+`08-plugins/01-softkey-plugins.test.js`; 24 pass, 0 fail, 1 skip on 2026-10-10):
 HEAD and the Edge key on a fresh key · the owner statement · an ordinary press writes no link and
 a budget use owes its receipt · a budget pays only started uses and a TX start pays only for its
 own request (mismatch refused `1C`) · hold and resume · a settle takes a press and a restart keeps

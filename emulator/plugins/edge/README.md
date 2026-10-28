@@ -59,7 +59,7 @@ listed in [AUDIT.md](AUDIT.md).
 ## Testing
 
 - **Emulator:** `tests/kit.test.js` is side-loaded by the onlykey-testing kit
-  (`01-protocol/38-softkey-plugins.test.js`) when the emulator was built with the plugin. Every
+  (`08-plugins/01-softkey-plugins.test.js`) when the emulator was built with the plugin. Every
   link, signature and receipt the key writes is checked by the host library's own reading of it.
 - **Phone:** `tests/e2e.js` is copied into ok-rn's in-app e2e suite when the build stages the plugin.
 - **Size:** `tools/measure-size.sh` compiles the plugin alone with the Teensy 1.6.5-r5 toolchain

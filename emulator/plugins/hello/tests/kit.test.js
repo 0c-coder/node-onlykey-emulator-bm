@@ -3,7 +3,7 @@
  * hello's emulator tests (the onlykey-testing kit), SIDE-LOADED: they live in
  * the plugin's folder and leave with it. node-onlykey-emulator records the
  * staged plugins and their folder in .stage/build.json; the kit's
- * 01-protocol/38-softkey-plugins.test.js reads that and registers each
+ * 08-plugins/01-softkey-plugins.test.js reads that and registers each
  * plugin's tests - so they only ever run against an emulator built with it.
  *
  * Everything from the kit comes in through `ctx` (no relative imports into

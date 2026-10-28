@@ -32,7 +32,7 @@ OKEMU_PLUGINS=edge node scripts/stage.js                             # stage onl
 | `tests/e2e.js` | its on-device tests (an app's in-app e2e): same shape |
 
 **Tests live in the plugin and are side-loaded,** so they leave with it.
-- **Kit:** the kit's `01-protocol/38-softkey-plugins.test.js` reads `.stage/build.json` and registers each `<pluginsDir>/<name>/tests/kit.test.js`. Against a base emulator it skips.
+- **Kit:** the kit's `08-plugins/01-softkey-plugins.test.js` reads `.stage/build.json` and registers each `<pluginsDir>/<name>/tests/kit.test.js`. Against a base emulator it skips.
 - **App:** with `OKEMU_APP_OUT` set, the stager copies each staged plugin's `tests/e2e.js` under it, with a generated list the app's suite registers.
 
 A test gets the app or the kit through `ctx` (device access, `IFACE`, `okmsg` or `protocol`, the PIN), never by a relative path.

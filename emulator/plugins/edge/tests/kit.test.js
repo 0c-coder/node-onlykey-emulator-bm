@@ -1,7 +1,7 @@
 'use strict';
 /*
  * edge's emulator tests (the onlykey-testing kit), SIDE-LOADED from this folder
- * by 01-protocol/38-softkey-plugins.test.js when the emulator was built with
+ * by 08-plugins/01-softkey-plugins.test.js when the emulator was built with
  * OKEMU_PLUGINS=edge.
  *
  * The firmware is a notary (DESIGN.md section 0); the truth is the LIBRARY's

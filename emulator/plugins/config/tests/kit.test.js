@@ -1,7 +1,7 @@
 'use strict';
 /*
  * config's emulator tests (the onlykey-testing kit), SIDE-LOADED from this
- * folder by 01-protocol/38-softkey-plugins.test.js when the emulator was built
+ * folder by 08-plugins/01-softkey-plugins.test.js when the emulator was built
  * with OKEMU_PLUGINS=config (the test there requires the EMULATED capability,
  * so these never reach a hard key - OKGETCONFIG never goes into one).
  *
