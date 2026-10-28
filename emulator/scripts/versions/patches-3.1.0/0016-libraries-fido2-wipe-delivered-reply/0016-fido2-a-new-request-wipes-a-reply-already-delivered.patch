@@ -1,0 +1,97 @@
+From 3ba6aa7f6a26dbe291ecbf0c83046b496bf2f95c Mon Sep 17 00:00:00 2001
+From: bmatusiak <bmatusiak@gmail.com>
+Date: Wed, 28 Oct 2026 19:32:01 -0400
+Subject: [PATCH] fido2: a new request wipes a reply already delivered
+
+A reply over WebAuthn stays stored after it is delivered: the next
+request of any kind is answered with it again until the Wipedata timer
+wipes it, 5 s after it was last served. The timer is there for hosts
+that send every request twice (Windows 10 1903); the second copy is
+answered from the stored reply.
+
+The transit layer now recognises a repeated packet by its counter and
+answers it before anything runs. So a request that is not a poll and
+arrives after the last reply was delivered whole is a new request: the
+timer is stopped and its wipe done at once, keeping the request's own
+CTAP message. A host that sends several requests in a row no longer
+waits 5 s before each one; a repeated packet is answered as before.
+---
+ fido2/ok_extension.cpp |  8 ++++++++
+ onlykey/okcore.cpp     | 15 ++++++++++++++-
+ onlykey/okcore.h       |  1 +
+ 3 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/fido2/ok_extension.cpp b/fido2/ok_extension.cpp
+index 5e3eac0..3a01767 100644
+--- a/fido2/ok_extension.cpp
++++ b/fido2/ok_extension.cpp
+@@ -417,6 +417,14 @@ int16_t bridge_to_onlykey(uint8_t *_appid, uint8_t *keyh, int handle_len, uint8_
+                     return 0;
+                 }
+             }
++            // A new request after the last reply was delivered whole: that
++            // reply is wiped now, not when the Wipedata timer fires, so this
++            // request is not answered with it. A repeated packet returned
++            // above and is still answered from the stored reply.
++            if (cmd != OKPING && pending_operation == CTAP2_ERR_DATA_WIPE &&
++                large_resp_buffer_offset && large_resp_buffer_cursor >= large_resp_buffer_offset) {
++                wipedata_now();
++            }
+ #ifdef DEBUG
+             Serial.println("Decrypted client handle");
+             byteprint(client_handle, handle_len);
+diff --git a/onlykey/okcore.cpp b/onlykey/okcore.cpp
+index 0620dbc..73a622d 100644
+--- a/onlykey/okcore.cpp
++++ b/onlykey/okcore.cpp
+@@ -5569,6 +5569,9 @@ void okcore_run_pending_op() {
+     fadeoff(0);
+ }
+ 
++/* Set by wipedata_now(): the request being handled is in ctap_buffer. */
++static int wipe_keeps_request = 0;
++
+ void wipetasks() {
+     packet_buffer_offset = 0;
+     memset(rsa_private_key, 0, MAX_RSA_KEY_SIZE);
+@@ -5579,7 +5582,7 @@ void wipetasks() {
+      * and the start of the message zeroed, so the request failed with
+      * CTAP1_ERR_INVALID_COMMAND. A stalled message is still dropped by
+      * ctaphid_check_timeouts(), and everything else is wiped as before. */
+-    if (!ctaphid_buffering()) memset(ctap_buffer, 0, CTAPHID_BUFFER_SIZE);
++    if (!ctaphid_buffering() && !wipe_keeps_request) memset(ctap_buffer, 0, CTAPHID_BUFFER_SIZE);
+     memset(large_resp_buffer, 0, LARGE_RESP_BUFFER_SIZE);
+     memset(keyboard_buffer, 0, KEYBOARD_BUFFER_SIZE);
+     memset(packet_buffer_details, 0, sizeof(packet_buffer_details));
+@@ -5679,6 +5682,16 @@ void wipedata() {
+     packet_buffer_details[1] = 0;
+ }
+ 
++/* Stop the Wipedata timer and wipe now what it would wipe. Called while a
++ * request is handled: that request's CTAP message in ctap_buffer is kept. */
++void wipedata_now() {
++    SoftTimer.remove(&Wipedata);
++    if (configmode) return;
++    wipe_keeps_request = 1;
++    wipetasks();
++    wipe_keeps_request = 0;
++}
++
+ void fadeoffafter20() {
+     Usertimeout.startDelayed();
+ }
+diff --git a/onlykey/okcore.h b/onlykey/okcore.h
+index 54ad338..746826e 100644
+--- a/onlykey/okcore.h
++++ b/onlykey/okcore.h
+@@ -382,6 +382,7 @@ extern bool fadeoffafter20sec(Task *me);
+ extern bool fadeendafter2sec(Task *me);
+ extern void typeoutbackup(Task *me);
+ extern void wipedata();
++extern void wipedata_now();
+ extern void wipetasks();
+ extern void fadeoffafter20();
+ extern void cancelfadeoffafter20();
+-- 
+2.55.0.windows.2
+

@@ -45,11 +45,18 @@ const rcFixes = require('./fixes-3.1.0');
  * runs what the developer hard key runs. OKEMU_RC_FIXES=0 stages the RC exactly as published.
  */
 const withFixes = process.env.OKEMU_RC_FIXES !== '0';
+/*
+ * The experimental ones (fixes-3.1.0.js `experimental`, an EXPERIMENTAL file in the patch folder) only for a build that
+ * asks, OKEMU_EXPERIMENTAL=1 - the testnet soft key we develop on - on top of the fixes. build.json lists them in
+ * `fixes` like the others, so a build says what it carries.
+ */
+const withExperimental = withFixes && process.env.OKEMU_EXPERIMENTAL === '1';
+const experimental = withExperimental && rcFixes.experimental ? rcFixes.experimental : { names: [], patches: [] };
 
 module.exports = {
   ...workingTree,
-  patches: withFixes ? rcFixes.patches : [],
-  fixes: withFixes ? rcFixes.names : [],
+  patches: withFixes ? [...rcFixes.patches, ...experimental.patches] : [],
+  fixes: withFixes ? [...rcFixes.names, ...experimental.names] : [],
   version: 'v3.1.0',
   pins: { libraries: 'fe9e293', 'OnlyKey-Firmware': '80e3ba0' },
   status: 'untried',

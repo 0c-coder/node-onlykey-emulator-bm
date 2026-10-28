@@ -61,4 +61,37 @@ module.exports = {
       ],
     },
   ],
+  experimental: {
+    names: ["0016"],
+    patches: [
+      /* 0016-fido2-a-new-request-wipes-a-reply-already-delivered.patch */
+      {
+        file: "libraries/fido2/ok_extension.cpp",
+        edits: [
+          ["                    return 0;\n                }\n            }\n#ifdef DEBUG\n            Serial.println(\"Decrypted client handle\");\n            byteprint(client_handle, handle_len);\n",
+           "                    return 0;\n                }\n            }\n            // A new request after the last reply was delivered whole: that\n            // reply is wiped now, not when the Wipedata timer fires, so this\n            // request is not answered with it. A repeated packet returned\n            // above and is still answered from the stored reply.\n            if (cmd != OKPING && pending_operation == CTAP2_ERR_DATA_WIPE &&\n                large_resp_buffer_offset && large_resp_buffer_cursor >= large_resp_buffer_offset) {\n                wipedata_now();\n            }\n#ifdef DEBUG\n            Serial.println(\"Decrypted client handle\");\n            byteprint(client_handle, handle_len);\n"],
+        ],
+      },
+      /* 0016-fido2-a-new-request-wipes-a-reply-already-delivered.patch */
+      {
+        file: "libraries/onlykey/okcore.cpp",
+        edits: [
+          ["    fadeoff(0);\n}\n\nvoid wipetasks() {\n    packet_buffer_offset = 0;\n    memset(rsa_private_key, 0, MAX_RSA_KEY_SIZE);\n",
+           "    fadeoff(0);\n}\n\n/* Set by wipedata_now(): the request being handled is in ctap_buffer. */\nstatic int wipe_keeps_request = 0;\n\nvoid wipetasks() {\n    packet_buffer_offset = 0;\n    memset(rsa_private_key, 0, MAX_RSA_KEY_SIZE);\n"],
+          ["     * and the start of the message zeroed, so the request failed with\n     * CTAP1_ERR_INVALID_COMMAND. A stalled message is still dropped by\n     * ctaphid_check_timeouts(), and everything else is wiped as before. */\n    if (!ctaphid_buffering()) memset(ctap_buffer, 0, CTAPHID_BUFFER_SIZE);\n    memset(large_resp_buffer, 0, LARGE_RESP_BUFFER_SIZE);\n    memset(keyboard_buffer, 0, KEYBOARD_BUFFER_SIZE);\n    memset(packet_buffer_details, 0, sizeof(packet_buffer_details));\n",
+           "     * and the start of the message zeroed, so the request failed with\n     * CTAP1_ERR_INVALID_COMMAND. A stalled message is still dropped by\n     * ctaphid_check_timeouts(), and everything else is wiped as before. */\n    if (!ctaphid_buffering() && !wipe_keeps_request) memset(ctap_buffer, 0, CTAPHID_BUFFER_SIZE);\n    memset(large_resp_buffer, 0, LARGE_RESP_BUFFER_SIZE);\n    memset(keyboard_buffer, 0, KEYBOARD_BUFFER_SIZE);\n    memset(packet_buffer_details, 0, sizeof(packet_buffer_details));\n"],
+          ["    packet_buffer_details[1] = 0;\n}\n\nvoid fadeoffafter20() {\n    Usertimeout.startDelayed();\n}\n",
+           "    packet_buffer_details[1] = 0;\n}\n\n/* Stop the Wipedata timer and wipe now what it would wipe. Called while a\n * request is handled: that request's CTAP message in ctap_buffer is kept. */\nvoid wipedata_now() {\n    SoftTimer.remove(&Wipedata);\n    if (configmode) return;\n    wipe_keeps_request = 1;\n    wipetasks();\n    wipe_keeps_request = 0;\n}\n\nvoid fadeoffafter20() {\n    Usertimeout.startDelayed();\n}\n"],
+        ],
+      },
+      /* 0016-fido2-a-new-request-wipes-a-reply-already-delivered.patch */
+      {
+        file: "libraries/onlykey/okcore.h",
+        edits: [
+          ["extern bool fadeendafter2sec(Task *me);\nextern void typeoutbackup(Task *me);\nextern void wipedata();\nextern void wipetasks();\nextern void fadeoffafter20();\nextern void cancelfadeoffafter20();\n",
+           "extern bool fadeendafter2sec(Task *me);\nextern void typeoutbackup(Task *me);\nextern void wipedata();\nextern void wipedata_now();\nextern void wipetasks();\nextern void fadeoffafter20();\nextern void cancelfadeoffafter20();\n"],
+        ],
+      },
+    ],
+  },
 };

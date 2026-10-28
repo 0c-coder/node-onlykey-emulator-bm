@@ -71,26 +71,40 @@ function parsePatch(text, repoDir) {
  */
 const all = fs.readdirSync(dir).filter((d) => /^\d{4}-/.test(d)).sort();
 const held = all.filter((d) => fs.existsSync(path.join(dir, d, 'HOLD')));
-const fixes = all.filter((d) => !held.includes(d)).map((d) => {
+/*
+ * EXPERIMENTAL: a folder holding an EXPERIMENTAL file (its reason inside) is generated like a fix but kept apart, as
+ * `experimental` - staged only for a build that asks (OKEMU_EXPERIMENTAL=1), never in the RC fixes every build gets,
+ * so a release hex never carries it (Brad, 2026-10-28: 0016 "as an experimental speed improvement").
+ * build-hardkey.sh skips it the same way.
+ */
+const experimentalDirs = all.filter((d) => !held.includes(d) && fs.existsSync(path.join(dir, d, 'EXPERIMENTAL')));
+const fixOf = (d) => {
   const repo = REPOS[d.split('-')[1]];
   if (!repo) throw new Error(`${d}: the folder name says which repository (${Object.keys(REPOS).join(' | ')}) after the number`);
   const patches = fs.readdirSync(path.join(dir, d)).filter((f) => f.endsWith('.patch')).sort();
   if (!patches.length) throw new Error(`${d}: no .patch file`);
   return { name: d.slice(0, 4), patches: patches.map((p) => ({ patch: p, files: parsePatch(fs.readFileSync(path.join(dir, d, p), 'utf8'), repo) })) };
-});
+};
+const fixes = all.filter((d) => !held.includes(d) && !experimentalDirs.includes(d)).map(fixOf);
+const experimental = experimentalDirs.map(fixOf);
 
 const q = (s) => JSON.stringify(s);
-const body = ['module.exports = {', `  names: [${fixes.map((f) => q(f.name)).join(', ')}],`, '  patches: ['];
-for (const f of fixes) {
-  for (const p of f.patches) {
-    for (const file of p.files) {
-      body.push(`    /* ${p.patch} */`, '    {', `      file: ${q(file.file)},`, '      edits: [');
-      for (const [find, replace] of file.edits) body.push(`        [${q(find)},`, `         ${q(replace)}],`);
-      body.push('      ],', '    },');
+const patchLines = (list, indent) => {
+  const out = [];
+  for (const f of list) {
+    for (const p of f.patches) {
+      for (const file of p.files) {
+        out.push(`${indent}/* ${p.patch} */`, `${indent}{`, `${indent}  file: ${q(file.file)},`, `${indent}  edits: [`);
+        for (const [find, replace] of file.edits) out.push(`${indent}    [${q(find)},`, `${indent}     ${q(replace)}],`);
+        out.push(`${indent}  ],`, `${indent}},`);
+      }
     }
   }
-}
-body.push('  ],', '};', '');
+  return out;
+};
+const body = ['module.exports = {', `  names: [${fixes.map((f) => q(f.name)).join(', ')}],`, '  patches: [', ...patchLines(fixes, '    '), '  ],'];
+body.push('  experimental: {', `    names: [${experimental.map((f) => q(f.name)).join(', ')}],`, '    patches: [', ...patchLines(experimental, '      '), '    ],', '  },');
+body.push('};', '');
 
 const old = fs.readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
 const at = old.indexOf('module.exports = {');
@@ -105,7 +119,8 @@ if (mode === '--check') {
   const checkout = path.resolve(rest[1] || '');
   const pins = require(path.join(here, `v${version}.js`)).pins;
   const files = new Map();
-  for (const f of fixes) for (const p of f.patches) for (const file of p.files) {
+  /* the experimental ones on top of the fixes, as an OKEMU_EXPERIMENTAL build stages them */
+  for (const f of [...fixes, ...experimental]) for (const p of f.patches) for (const file of p.files) {
     const [repoDir, ...inRepo] = file.file.split('/');
     const pin = pins[repoDir];
     if (!files.has(file.file)) files.set(file.file, execFileSync('git', ['-C', checkout, 'show', `${pin}:${inRepo.join('/')}`], { encoding: 'utf8', maxBuffer: 64 << 20 }).replace(/\r\n/g, '\n'));
@@ -117,9 +132,10 @@ if (mode === '--check') {
     for (const [find, replace] of file.edits) text = text.replace(find, replace);
     files.set(file.file, text);
   }
-  console.log(`every edit of ${fixes.map((f) => f.name).join(', ') || 'no fix'} finds its text exactly once at the v${version} pins`);
+  console.log(`every edit of ${[...fixes, ...experimental].map((f) => f.name).join(', ') || 'no fix'} finds its text exactly once at the v${version} pins`);
 } else {
   fs.writeFileSync(out, next);
   console.log(`fixes-${version}.js written from patches-${version}/ (${fixes.map((f) => f.name).join(', ') || 'none'})`);
 }
 if (held.length) console.log(`held, not staged: ${held.join(', ')}`);
+if (experimental.length) console.log(`experimental, staged only with OKEMU_EXPERIMENTAL=1: ${experimental.map((f) => f.name).join(', ')}`);

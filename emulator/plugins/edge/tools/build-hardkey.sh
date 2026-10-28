@@ -54,6 +54,8 @@ fixes=""
 for p in "$PATCHES"/*/*.patch; do
   [ -f "$p" ] || continue
   [ -f "$(dirname "$p")/HOLD" ] && { say "   held, not applied: $(basename "$(dirname "$p")")"; continue; }
+  # an EXPERIMENTAL patch only for a build that asks (OKEMU_EXPERIMENTAL=1) - never the release hex (gen-fixes.js)
+  [ -f "$(dirname "$p")/EXPERIMENTAL" ] && [ "$OKEMU_EXPERIMENTAL" != 1 ] && { say "   experimental, not applied: $(basename "$(dirname "$p")")"; continue; }
   git -C "$OUT/libraries" -c user.name=build-hardkey -c user.email=build@localhost am -q "$p" \
     || { git -C "$OUT/libraries" am --abort; echo "   $(basename "$p") does not apply to $LIB_PIN - not building"; exit 1; }
   fixes="$fixes $(basename "$(dirname "$p")" | cut -c1-4)"
