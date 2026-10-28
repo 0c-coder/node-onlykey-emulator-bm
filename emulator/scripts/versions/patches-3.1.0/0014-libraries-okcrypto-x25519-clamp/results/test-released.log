@@ -1,0 +1,13 @@
+OKGETPUBKEY slot 101
+  public d23c65b66ad6757a03693fec52b63c3ebb2d86e64065895a728995f14f907f14 -> u(k*B), k NOT clamped (non-conformant)
+OKGETPUBKEY slot 102
+  public 9c9a626e5ac9b1155b85009093a726b6c4b0551a446906f87d125f60b4e50866 -> u(rev(k)*B), not clamped (wrong byte order AND not clamped)
+OKGETPUBKEY slot 103
+  public 8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a -> RFC X25519(k) = RFC public key (conformant)
+OKDECRYPT (X25519 ECDH) slot 101 with RFC 7748 Bob public key
+  enter 4 3 1 on the OnlyKey
+  shared 4d7e7399c5b77bc552cdb8cca0c409a9d6360128e239020927dda70daabd4075 -> k*bobPub, k NOT clamped (non-conformant)
+OKDECRYPT (X25519 ECDH) slot 103 with RFC 7748 Bob public key
+  enter 4 3 1 on the OnlyKey
+  shared 4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742 -> RFC shared secret (conformant)
+RESULT: FAIL - ECC1 (the RFC 7748 key) gives u(k*B), k NOT clamped (non-conformant) / k*bobPub, k NOT clamped (non-conformant) while the control gives the RFC values: the firmware does not clamp the X25519 scalar
