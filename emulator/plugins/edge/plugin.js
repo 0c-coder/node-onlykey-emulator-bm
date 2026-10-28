@@ -12,6 +12,7 @@
  *   6 OnlyKey.ino include the plugin header
  *   7 OnlyKey.ino the wrong-challenge branch: DENY
  *   8 okcore.cpp  wipeflashdata(): the Edge state is wiped with the key
+ *   9-11          OKEDGE over WebAuthn (solo.cpp, ok_extension.cpp) - see the hooks below
  */
 module.exports = {
   name: 'edge',
@@ -68,6 +69,29 @@ module.exports = {
       anchor: 'void wipeflashdata() {\n',
       insert: 'after',
       text: '    okplugin_edge_wipe();\n',
+    },
+    /*
+     * OVER WEBAUTHN (Brad, 2026-10-28: Edge needs a WebAuthn path, so the web app can be the key's host for agents).
+     * A browser reaches the key only through WebAuthn; these three carry OKEDGE there, behind ctap_bridge's switch
+     * (its okplugin_ctap_bridge_allows() admits OKEDGE while it is on), the way derive_secret carries OKDERIVESECRET:
+     *   9 solo.cpp          forward OKEDGE to the extension (solo.cpp does not include onlykey.h: the wire value)
+     *  10 ok_extension.cpp  include the plugin header
+     *  11 ok_extension.cpp  the transit dispatch: one OKEDGE request whole, before the 57-byte chunk loop - Edge reads
+     *                       its arguments from [6] and GRANT_CREATE uses all 58 bytes
+     * All three are `with: 'ctap_bridge'` (cli/firmware-plugins.js): the switch's gate is a ctap_bridge hook, so a build
+     * without the bridge leaves them out and edge is the USB-only plugin it was.
+     */
+    { file: 'libraries/fido2/solo.cpp', anchor: '        case OKSIGN:\n', insert: 'after', text: '        case (TYPE_INIT | 0x78): /* OKEDGE, plugin edge */\n', with: 'ctap_bridge' },
+    { file: 'libraries/fido2/ok_extension.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: '#include "plugins/edge/okplugin_edge.h"\n', with: 'ctap_bridge' },
+    {
+      with: 'ctap_bridge',
+      file: 'libraries/fido2/ok_extension.cpp',
+      anchor: '                while (handle_len > 0) { // Max size packet minus header\n',
+      insert: 'before',
+      text: '                if (cmd == OKEDGE) {\n'
+        + '                    okplugin_edge_ctap(client_handle, handle_len, opt1);\n'
+        + '                    handle_len = 0;\n'
+        + '                }\n',
     },
   ],
 };

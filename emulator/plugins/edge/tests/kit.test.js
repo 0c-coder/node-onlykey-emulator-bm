@@ -1338,4 +1338,82 @@ module.exports = function register({ it }, ctx) {
       assert.bytes(Buffer.from(c.head), Buffer.from(chain.weld(chain.genesis(id), c.link)), 'the continue is not welded onto this device\'s own genesis');
       assert.bytes(Buffer.from(h.head), Buffer.from(c.head));
     });
+
+  /*
+   * OVER WEBAUTHN (Brad, 2026-10-28: Edge needs a WebAuthn path, so the web app can be the key's host for agents). The
+   * same Edge, reached through the WebAuthn tunnel alone: the lib composed as a page composes it (kit lib/webenv.js),
+   * with its edge plugin. Edge's own requests go as OKEDGE through okcrypto's supplied ctap (okcrypto.tunnelRequest),
+   * answered by this plugin's okplugin_edge_ctap() when ctap_bridge is built in; a budget's sign is an ordinary agent
+   * OKSIGN over the tunnel, paid by the budget's self-press. Each answer is checked against what USB says, and the
+   * grant's checkpoint carries its ML-DSA-65 twin - an answer of its own over WebAuthn (SUB.MORE).
+   */
+  it('edge: over WebAuthn - HEAD as over USB, a budget at a press (both checkpoint signatures), a sign it pays, the receipt, the links (ctap_bridge)',
+    async ({ device, assert, signal, log }) => {
+      await device.restart({ signal });
+      await device.ensureUnlocked(ctx.PINS.primary, { signal });
+      await clearDebts(device, { signal, log });
+      const usb = await head(device, { signal });
+
+      const Rectify = ctx.requireLib('@bmatusiak/rectify');
+      const plugins = ['host', 'transport/tunnel', 'session', 'device', 'okcrypto', 'edge']
+        .map((p) => ctx.requireLib(`node-onlykey-lib/plugins/${p}`));
+      const { createWebAuthnCtap } = ctx.requireLib('node-onlykey-lib/transport/webauthn');
+      const { window } = ctx.kit.webenv.create(device, { signal });
+      plugins.config = { okcrypto: { ctap: createWebAuthnCtap({ credentials: window.navigator.credentials }) } };
+      const app = await new Promise((resolve, reject) => {
+        const a = Rectify.build(plugins, (err, started) => (err ? reject(err) : resolve(started)));
+        a.start();
+      });
+      try {
+        const { okcrypto, edge: web } = app.services;
+        await okcrypto.connectTunnel();
+
+        const h = await web.head();
+        assert.equal(h.seq === null ? SEQ_NONE : h.seq, usb.seq, 'HEAD over WebAuthn: another seq than over USB');
+        assert.bytes(Buffer.from(h.head), Buffer.from(usb.head), 'HEAD over WebAuthn: another head than over USB');
+
+        /* a budget at a press: one agent sign (code 222) for the test identity; pressed once the key has primed it */
+        const primed = device.log.count(PRIMED);
+        const g = await web.grant({
+          scopes: [{ op: OP_SIGN, slot: 222, cap: 1, label: OKT_LABEL }],
+          reasonHash: new Uint8Array(sha256(Buffer.from('okt: edge over webauthn'))),
+          verifiedHead: h.head,
+          onPress: () => {
+            device.log.waitForCount(PRIMED, primed + 1, { timeoutMs: 20000, signal }).then(() => device.press(1), () => {});
+          },
+        });
+        log(`budget #${g.grantId} (${g.uses} use) at #${g.seq}; checkpoint #${g.checkpoint.seq}`);
+        const { publicKey } = await web.publicKey();
+        const pubPq = await web.publicKeyPq('checkpoint');
+        assert.ok(checkpointVerifies(publicKey, g.checkpoint.seq, g.checkpoint.head, g.checkpoint.signature, pubPq, g.checkpoint.signaturePq),
+          'the grant\'s checkpoint over WebAuthn: P-256 and ML-DSA-65 (SUB.MORE) do not both verify');
+
+        /* the sign the budget pays: TX start over WebAuthn, then the agent sign over the tunnel - no press */
+        const message = agentPayload('okt edge over webauthn');
+        const before = await web.head();
+        await web.txStart(before.head, grants.requestSubject(new Uint8Array(message)));
+        const sig = await okcrypto.sign(222, message, { expectBytes: 64 });
+        assert.equal(sig.length, 64, 'the agent sign over the tunnel: not 64 bytes');
+        const after = await web.head();
+        const [l] = await web.pickup(after.seq, 1);
+        const f = chain.decodeLink(l.link);
+        assert.equal(JSON.stringify([f.op, f.decision, f.slot, f.grantId]), JSON.stringify([OP_SIGN, SELF_PRESS, 222, g.grantId]),
+          'the sign over WebAuthn is not a self-press under the budget');
+        assert.bytes(Buffer.from(f.subject), Buffer.from(grants.requestSubject(new Uint8Array(message))), 'its subject is not the library\'s requestSubject');
+
+        /* the receipt over WebAuthn (it completes the budget), then every link since the grant (PICKUP: 3 per request) */
+        const rc = await web.receipt(f.seq, 0, new Uint8Array(sha256(Buffer.from('okt: edge over webauthn receipt'))));
+        const count = rc.seq - g.seq + 1;
+        const links = await web.pickup(g.seq, count);
+        assert.equal(links.length, count, `PICKUP over WebAuthn: ${links.length} of ${count} links`);
+        links.forEach((x, i) => assert.equal(chain.decodeLink(x.link).seq, g.seq + i, `link ${i} is out of order`));
+        const end = await web.head();
+        assert.ok(!end.live.includes(g.grantId), 'the budget did not complete with its receipt');
+        const usbEnd = await head(device, { signal });
+        assert.bytes(Buffer.from(end.head), Buffer.from(usbEnd.head), 'the chain over WebAuthn and over USB end at different heads');
+        log(`over WebAuthn: HEAD, GRANT_CREATE + press (checkpoint + ML-DSA), TX start, a paid sign, RECEIPT, PICKUP of ${count} - head #${end.seq}`);
+      } finally {
+        await app.destroy();
+      }
+    });
 };

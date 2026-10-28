@@ -57,6 +57,7 @@ int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code) {
   if (!cb_on()) return 0;
   if (cmd == OKGETPUBKEY) return code == RESERVED_KEY_DERIVATION || code == DERIVATION_V2_PUBKEY_CODE;
   if (cmd == OKCTAPBRIDGE) return 1; /* its report, read only (okplugin_ctap_bridge_report_sealed) */
+  if (cmd == (TYPE_INIT | 0x78)) return 1; /* OKEDGE: handled by the edge plugin's okplugin_edge_ctap() when it is built in */
   if (cmd == OKSIGN || cmd == OKDECRYPT) return (code >= 201 && code <= 204) || (code >= 221 && code <= 224);
   return 0;
 }

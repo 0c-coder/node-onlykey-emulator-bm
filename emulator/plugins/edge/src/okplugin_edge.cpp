@@ -275,6 +275,7 @@ static struct {
   uint8_t scopes_len;
   uint16_t lifetime;          /* PRESS_GRANT: minutes, 0 = DEFAULT_LIFETIME_MIN */
   uint8_t labels[MAX_SCOPES][32]; /* PRESS_GRANT: the full labels of derived-code scopes, for the subject */
+  uint8_t web;                /* the request came over WebAuthn: the answer made at the press is stored there */
 } press;
 
 /* ------------------------------------------------------------ bytes and hashes */
@@ -300,10 +301,41 @@ static void H(uint8_t out[32], const char *tag, const uint8_t *a, size_t al,
   sha256_final(&ctx, out);
 }
 
+/*
+ * Replies over WebAuthn: a request there has one stored answer (store_FIDO_response replaces it, at most
+ * LARGE_RESP_BUFFER_SIZE bytes sealed), so the 64-byte replies made while okplugin_edge_ctap() handles a request - or
+ * while a press that request waited for is decided - are collected in web_out and stored once, sealed with the transit
+ * key. web_len is -1 when not collecting. A status reply while collecting drops what was collected: the text is the
+ * answer. PICKUP over WebAuthn takes at most WEB_PICKUP_MAX links, so the collected answer stays under the 512-byte
+ * poll chunk.
+ *
+ * An ML-DSA-65 signature does not fit one answer beside the replies before it (checkpoint, statement, a grant's
+ * checkpoint): while collecting, mldsa_sign_reply() keeps what it would sign (web_more) instead, and OKEDGE_MORE signs
+ * and stores it as an answer of its own. web_more holds only a digest this plugin computed for that answer; any other
+ * request clears it.
+ */
+extern int outputmode;
+#define WEB_PICKUP_MAX 3
+static uint8_t web_out[2 * WEB_PICKUP_MAX * LINK_BYTES];
+static int web_len = -1;
+static struct {
+  uint8_t set;
+  uint8_t which;
+  uint8_t digest[32];
+} web_more;
+static int to_web(void) { return outputmode == WEBAUTHN; }
+static void web_flush(void) {
+  int n = web_len;
+  web_len = -1;
+  if (n > 0) send_transport_response(web_out, n, 1, false);
+  memset(web_out, 0, sizeof(web_out));
+}
+
 /* "EDGE:xx" - the only text the plugin sends (okplugin_edge.h lists the codes) */
 static void status(uint8_t code) {
   static const char HEX[] = "0123456789ABCDEF";
   char s[8] = {'E', 'D', 'G', 'E', ':', HEX[code >> 4], HEX[code & 0x0f], 0};
+  if (web_len >= 0) web_len = 0;
   hidprint(s);
 }
 
@@ -319,7 +351,14 @@ static void reply(const uint8_t *data, int len) {
   uint8_t r[64];
   memset(r, 0, sizeof(r));
   memcpy(r, data, len > 64 ? 64 : len);
-  send_transport_response(r, 64, false, false);
+  if (web_len >= 0) {
+    if (web_len + 64 <= (int)sizeof(web_out)) {
+      memcpy(web_out + web_len, r, 64);
+      web_len += 64;
+    }
+    return;
+  }
+  send_transport_response(r, 64, to_web(), false);
 }
 
 /* seq . head: the answer of RECEIPT, SETTLE and LOSS - the head the next TX start must name */
@@ -489,19 +528,28 @@ static void mldsa_pubkey_reply(uint8_t which) {
   int ok = mldsa_keypair(which, large_resp_buffer);
   memset(ctap_buffer, 0, MLDSA_SK_SIZE);
   if (!ok) { status(EDGE_SIGN_FAILED); return; }
-  send_transport_response(large_resp_buffer, MLDSA_PK_SIZE, false, false);
-  memset(large_resp_buffer, 0, MLDSA_PK_SIZE);
+  /* over WebAuthn large_resp_buffer becomes the stored answer, sealed in place: it is not wiped here */
+  int web = to_web();
+  send_transport_response(large_resp_buffer, MLDSA_PK_SIZE, web, false);
+  if (!web) memset(large_resp_buffer, 0, MLDSA_PK_SIZE);
 }
 
 /* the ML-DSA-65 signature of a key over a 32-byte digest, sent whole (MLDSA_SIG_SIZE bytes) */
 static int mldsa_sign_reply(uint8_t which, const uint8_t digest[32]) {
+  if (web_len >= 0) {
+    web_more.which = which;
+    memcpy(web_more.digest, digest, 32);
+    web_more.set = 1;
+    return 1;
+  }
   size_t siglen = 0;
   int ok = mldsa_keypair(which, large_resp_buffer)
         && PQCP_MLDSA_NATIVE_MLDSA65_signature(large_resp_buffer, &siglen, digest, 32, NULL, 0, ctap_buffer) == 0
         && siglen == MLDSA_SIG_SIZE;
   memset(ctap_buffer, 0, MLDSA_SK_SIZE);
-  if (ok) send_transport_response(large_resp_buffer, MLDSA_SIG_SIZE, false, false);
-  memset(large_resp_buffer, 0, MLDSA_SIG_SIZE);
+  int web = to_web();
+  if (ok) send_transport_response(large_resp_buffer, MLDSA_SIG_SIZE, web, false);
+  if (!(ok && web)) memset(large_resp_buffer, 0, MLDSA_SIG_SIZE);
   return ok;
 }
 
@@ -838,6 +886,7 @@ static void press_drop(void) {
 static void press_wait(uint8_t what, const uint8_t subject[32]) {
   press.what = what;
   press.since = millis();
+  press.web = to_web();
   fadeon(EDGE_PRESS_COLOR);
   okcore_prime_user_confirmation(OKEDGE, 0, (uint8_t *)subject, 32);
 }
@@ -1107,12 +1156,26 @@ void okplugin_edge_decision(int decision) {
     if (decision != OKEDGE_DECISION_APPROVE) { press_drop(); return; }
     /* an approve that cannot be used ends the pulse red; a pressed action ends it green, as a finished OKSIGN */
     if (!fresh) { press_drop(); fadeoff(1); return; }
-    if (!ensure_identity()) { press_drop(); fadeoff(1); status(EDGE_NEED_PIN); return; }
+    /* a press asked for over WebAuthn: its answer is stored there, collected into one answer */
+    uint8_t web = press.web;
+    if (web) {
+      outputmode = WEBAUTHN;
+      web_more.set = 0;
+      web_len = 0;
+    }
+    if (!ensure_identity()) {
+      press_drop();
+      fadeoff(1);
+      status(EDGE_NEED_PIN);
+      if (web) web_len = -1;
+      return;
+    }
     if (what == PRESS_GRANT) grant_pressed();
     else if (what == PRESS_RESUME) resume_pressed();
     else if (what == PRESS_SETTLE) settle_pressed();
     else if (what == PRESS_LOSS) loss_pressed();
     press_drop();
+    if (web) web_flush();
     fadeoff(85);
     return;
   }
@@ -1282,6 +1345,7 @@ void okplugin_edge_recv(uint8_t *buffer) {
       /* from u32 . count u8 (<= 8); per link: the link, then its head + the reveal (zeros if none) */
       uint32_t from = get32(buffer + 6);
       uint8_t count = buffer[10] > HELD ? HELD : buffer[10];
+      if (web_len >= 0 && count > WEB_PICKUP_MAX) { status(EDGE_BAD_RANGE); return; } /* over WebAuthn: one answer */
       for (uint32_t s = from; s < from + count; s++) {
         struct held_link *h = &held[s % HELD];
         if (!h->used || h->seq != s) { status(EDGE_NOT_HELD); return; }
@@ -1304,6 +1368,16 @@ void okplugin_edge_recv(uint8_t *buffer) {
     case OKEDGE_PUBKEY_PQ:
       mldsa_pubkey_reply(buffer[6] ? MLDSA_OWNER_KEY : MLDSA_CHECKPOINT_KEY);
       return;
+    case OKEDGE_MORE: {
+      /* over WebAuthn: the ML-DSA-65 signature the last answer left out; nothing is kept over USB */
+      if (!web_more.set) { status(EDGE_UNKNOWN_REQUEST); return; }
+      uint8_t which = web_more.which, digest[32];
+      memcpy(digest, web_more.digest, 32);
+      memset(&web_more, 0, sizeof(web_more));
+      if (!mldsa_sign_reply(which, digest)) status(EDGE_SIGN_FAILED);
+      memset(digest, 0, 32);
+      return;
+    }
     case OKEDGE_STATEMENT:
       statement(buffer + 6);
       return;
@@ -1429,4 +1503,30 @@ void okplugin_edge_recv(uint8_t *buffer) {
       status(EDGE_UNKNOWN_REQUEST);
       return;
   }
+}
+
+/*
+ * An OKEDGE message over WebAuthn (ok_extension.cpp's transit dispatch). The request is rebuilt in the vendor report's
+ * layout - sub-op in [5], its arguments from [6], up to 58 bytes - so okplugin_edge_recv() reads it as it reads a
+ * report. Its 64-byte replies are collected and stored as one answer, sealed; a status text is stored as it is sent.
+ * A request that waits for a press stores nothing here: the browser's polls see the confirmation pending, and the
+ * reply made at the press is stored sealed then.
+ */
+void okplugin_edge_ctap(const uint8_t *data, int len, uint8_t sub) {
+  uint8_t buffer[64];
+  memset(buffer, 0, sizeof(buffer));
+  memset(buffer, 0xFF, 4);
+  buffer[4] = OKEDGE;
+  buffer[5] = sub;
+  if (len > 0) memcpy(buffer + 6, data, len < 58 ? len : 58);
+  outputmode = WEBAUTHN;
+  if (sub == OKEDGE_MORE) {
+    okplugin_edge_recv(buffer); /* an answer of its own, not collected */
+  } else {
+    web_more.set = 0;
+    web_len = 0;
+    okplugin_edge_recv(buffer);
+    web_flush();
+  }
+  memset(buffer, 0, sizeof(buffer));
 }

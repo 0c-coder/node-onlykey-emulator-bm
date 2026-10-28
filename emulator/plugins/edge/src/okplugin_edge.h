@@ -20,6 +20,7 @@
 #define OKEDGE_PUBKEY 0x04
 #define OKEDGE_PUBKEY_PQ 0x05     /* {which: 0 checkpoint key, 1 owner key}, no press: an ML-DSA-65 public key */
 #define OKEDGE_STATEMENT 0x06     /* {nametag hash 32}, no press, no link: the owner statement */
+#define OKEDGE_MORE 0x07          /* over WebAuthn only, no press: the ML-DSA-65 signature the last answer left out */
 #define OKEDGE_GRANT_CREATE 0x10  /* a press: opens a budget */
 #define OKEDGE_GRANT_LABEL 0x11   /* {scope index, label 32}, no press: a derived identity's label for the next GRANT_CREATE */
 #define OKEDGE_GRANT_REVOKE 0x12  /* no press: ends a live budget */
@@ -60,6 +61,8 @@
 
 /* recvmsg(): an OKEDGE message */
 void okplugin_edge_recv(uint8_t *buffer);
+/* the WebAuthn transit dispatch: an OKEDGE message, its sub-op and argument bytes */
+void okplugin_edge_ctap(const uint8_t *data, int len, uint8_t sub);
 /* okcore_prime_user_confirmation(): an operation is waiting for its decision */
 void okplugin_edge_primed(uint8_t opcode, uint8_t slot, const uint8_t *msg, size_t msg_len);
 /* the decision points: the press (approve), a wrong challenge (deny), the 20 s fade (timeout) */
