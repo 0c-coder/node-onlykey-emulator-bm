@@ -1394,6 +1394,18 @@ module.exports = function register({ it }, ctx) {
         assert.ok(checkpointVerifies(publicKey, g.checkpoint.seq, g.checkpoint.head, g.checkpoint.signature, pubPq, g.checkpoint.signaturePq),
           'the grant\'s checkpoint over WebAuthn: P-256 and ML-DSA-65 (SUB.MORE) do not both verify');
 
+        /*
+         * a CHECKPOINT on its own, no press: what a new device anchors its copy on instead of reading the key's
+         * history (a web app opened in a fresh browser) - the key's head, signed with both halves, over WebAuthn
+         */
+        const now = await web.head();
+        const cp = await web.checkpoint();
+        log(`checkpoint alone: #${cp.seq} (head #${now.seq})`);
+        assert.equal(cp.seq, now.seq, 'CHECKPOINT over WebAuthn: another seq than the head');
+        assert.bytes(Buffer.from(cp.head), Buffer.from(now.head), 'CHECKPOINT over WebAuthn: another head than HEAD');
+        assert.ok(checkpointVerifies(publicKey, cp.seq, cp.head, cp.signature, pubPq, cp.signaturePq),
+          'CHECKPOINT over WebAuthn: P-256 and ML-DSA-65 (SUB.MORE) do not both verify');
+
         /* the sign the budget pays: TX start over WebAuthn, then the agent sign over the tunnel - no press */
         const message = agentPayload('okt edge over webauthn');
         const before = await web.head();
