@@ -79,8 +79,13 @@ extern unsigned char okemu_scs_base[0x00100000];
 
 /* MK20DX256 has 6 touch-sensed buttons; firmware numbers them 1..6. */
 #define OKEMU_NUM_BUTTONS  6
-/* OnlyKey Color drives 2 NeoPixels. */
-#define OKEMU_NUM_PIXELS   2
+/*
+ * ONE LED, AS THE KEY HAS (Brad, 2026-10-28: "onlykey has only 1 led ... the emulator only needs 1 output").
+ * The firmware declares NUMPIXELS 2 (okcore.cpp) and writes pixel 0 and pixel 1 the same colour on back-to-back
+ * lines, every time - so the second output only ever repeated the first. The shim (shim/Adafruit_NeoPixel.h) drops
+ * writes at or past this count, so pixel 1 goes nowhere, as on a key with one LED wired; every host gets one pixel.
+ */
+#define OKEMU_NUM_PIXELS   1
 
 typedef struct { uint8_t r, g, b; } okemu_rgb;
 
