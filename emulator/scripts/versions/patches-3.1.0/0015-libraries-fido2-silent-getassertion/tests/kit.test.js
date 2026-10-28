@@ -34,14 +34,16 @@ module.exports = function register({ it }, ctx) {
     try {
       device.log.clear();
       const primed = device.log.count(PRIMED);
-      const answer = okcrypto.tunnelRequest(ctx.okmsg.MSG.OKSIGN, rsa.SLOT_SIGN, digest);
+      /* the web apps' stored-key sign (node-onlykey-lib okcrypto.sign: OKSIGN over the tunnel, collected by polling) */
+      const answer = okcrypto.sign(rsa.SLOT_SIGN, digest, { expectBytes: rsa.MODULUS });
       answer.catch(() => {});
       await device.log.waitForCount(PRIMED, primed + 1, { timeoutMs: 30000, signal: opts.signal });
       await device.sleep(300, { signal: opts.signal });
       device.press(1);
       const r = await answer;
-      if (!r || !r.data) throw new Error(`the key answered: ${r && r.text}`);
-      return Buffer.from(r.data).toString('hex');
+      const bytes = r && (r.data || r.signature || r);
+      if (!bytes || !bytes.length) throw new Error(`the key answered: ${JSON.stringify(r)}`);
+      return Buffer.from(bytes).toString('hex');
     } finally {
       await lib.destroy();
     }
