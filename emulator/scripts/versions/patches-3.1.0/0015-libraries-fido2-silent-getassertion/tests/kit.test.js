@@ -9,18 +9,18 @@
  * request that followed was dropped as a repeated packet ("Repeated data packet ignored"). The page never got its answer
  * and started over, for ever. Chrome on Linux sends the real request alone, so the web apps worked there.
  *
- * The kit's browser (onlykey-testing lib/webenv.js, silentCheck) sends what Windows sends. The test reads one tunnel
- * request with data - the agent public key a web app reads as its identity - plainly (as Linux) and behind a silent
- * check (as Windows): both must be answered, the same. Run by onlykey-testing's 09-patches (OKT_PATCHES=0015 runs it on
- * any build); any key, emulated or hard.
+ * The kit's browser (onlykey-testing lib/webenv.js, silentCheck) sends what Windows sends. The test reads, over the
+ * tunnel, the key the OnlyKey web apps derive for a label (okcrypto.derivePublicKey: the released firmware's own web
+ * derivation, slot 128) - once as Linux sends it, once behind a silent check as Windows does: both must be answered, the
+ * same key. Run by onlykey-testing's 09-patches (OKT_PATCHES=0015 runs it on any build); any key, emulated or hard.
  */
+const LABEL = 'onlykey-testing patch 0015 silent check';
+
 module.exports = function register({ it }, ctx) {
-  const identityThrough = async (device, opts) => {
+  const derivedThrough = async (device, opts) => {
     const { lib, okcrypto } = await ctx.kit.webenv.browserLib(device, opts);
     try {
-      const { readIdentity } = ctx.requireLib('node-onlykey-lib/bucket').bucketIdentity;
-      const { publicKey } = await readIdentity(okcrypto);
-      return Buffer.from(publicKey).toString('hex');
+      return Buffer.from(await okcrypto.derivePublicKey(LABEL)).toString('hex');
     } finally {
       await lib.destroy();
     }
@@ -33,12 +33,12 @@ module.exports = function register({ it }, ctx) {
   it('0015: the WebAuthn tunnel answers a request with data when a silent check (up false) comes first - Windows',
     async ({ device, assert, signal, log }) => {
       await device.ensureUnlocked(ctx.PINS.primary, { signal });
-      const plain = await identityThrough(device, { signal });
+      const plain = await derivedThrough(device, { signal, silentCheck: false });
       log(`one request (Linux): ${plain.slice(0, 16)}`);
-      const windows = await settle(identityThrough(device, { signal, silentCheck: true }), 60000);
+      const windows = await settle(derivedThrough(device, { signal, silentCheck: true }), 60000);
       log(`silent check first (Windows): ${windows.error ? `failed - ${windows.error.message}` : windows.value.slice(0, 16)}`);
       assert.ok(!windows.error,
         `behind a silent check the tunnel request was not answered (the extension ran on the check): ${windows.error && windows.error.message}`);
-      assert.equal(windows.value, plain, 'behind a silent check the tunnel answered something else');
+      assert.equal(windows.value, plain, 'behind a silent check the tunnel answered another key');
     });
 };
