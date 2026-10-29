@@ -16,7 +16,8 @@ request and changes no existing behaviour.
 ## What it answers
 
 `OKDERIVESECRET` (0x7C, 0xFC on the wire) over the WebAuthn tunnel only (transit-sealed, as every tunnel request
-after the connect), slot 128, payload `[mode][SHA-256(label)]`, 33 bytes in one packet:
+after the connect), slot 128, payload `[mode][SHA-256(label)]`, exactly 33 bytes in one final packet - any other
+length is refused ("Error derive_secret request") before the derive gate, so a malformed request asks no press:
 
 - **The secret:** `HKDF-SHA256(salt = [0x20 | label hash], IKM = the slot-128 key, info = "onlykey/derive-secret/v1/"
   + "touch/" or "touchless/" + the request's rpId hash)`, 32 bytes, staged with `send_transport_response(…, 1, 0)` -

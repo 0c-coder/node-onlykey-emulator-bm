@@ -45,7 +45,10 @@ not answer CTAP at all. A web page can never enable itself or name its own site.
 
 `buffer[5]`: 0 report ("ctap_bridge on|off site <rpId>|none") while unlocked; 1 on, 2 off, 3 set the site (`buffer[6]`
 length, `buffer[7..]` the rpId), 4 clear the site (none - not back to the default) - each only in config mode ("Error
-not in config mode" otherwise).
+not in config mode" otherwise); 5 the key's capabilities, while unlocked: "ctap_bridge capabilities:" then each,
+space-separated - "wipes-delivered" when the build carries patch 0016 (`OKCORE_WIPES_DELIVERED_REPLY`). Over the tunnel
+the request's first payload byte chooses: 5 the capabilities, anything else the report (read only either way). An older
+plugin answers its report to a 5, which a host reads as no capabilities.
 
 ## Tests
 
