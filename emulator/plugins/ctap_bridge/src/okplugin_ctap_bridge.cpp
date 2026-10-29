@@ -112,26 +112,12 @@ void okplugin_ctap_bridge_getpubkey(uint8_t *buffer) {
   send_transport_response(ecc_public_key, 64, 1, 0);
 }
 
-/* The capabilities line: "ctap_bridge capabilities:" then each capability, space-separated. */
-static void cb_capabilities(char *line) {
-  strcpy(line, "ctap_bridge capabilities:");
-#ifdef OKCORE_WIPES_DELIVERED_REPLY
-  strcat(line, " wipes-delivered");
-#endif
-}
-
 void okplugin_ctap_bridge_recv(uint8_t *buffer) {
   if (!(initialized == true && unlocked == true)) {
     hidprint("Error device locked");
     return;
   }
   uint8_t action = buffer[5];
-  if (action == 5) {
-    char caps[24 + CB_SITE_MAX];
-    cb_capabilities(caps);
-    hidprint(caps);
-    return;
-  }
   if (action != 0 && configmode == false) {
     hidprint("Error not in config mode");
     return;
@@ -170,12 +156,10 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer) {
 
 /*
  * The report over the WebAuthn tunnel, sealed by the transit key: the same text as over USB, so a browser learns the
- * key's site - the server it belongs to - the way every other host does. Read only. The request's first payload byte
- * (buffer[7]) 5 asks the capabilities line instead; any other value gives the report.
+ * key's site - the server it belongs to - the way every other host does. Read only: no action byte is read.
  */
-void okplugin_ctap_bridge_report_sealed(const uint8_t *buffer) {
+void okplugin_ctap_bridge_report_sealed(void) {
   char line[24 + CB_SITE_MAX];
-  if (buffer[7] == 5) cb_capabilities(line);
-  else cb_report(line);
+  cb_report(line);
   send_transport_response((uint8_t *)line, strlen(line), 1, 0);
 }

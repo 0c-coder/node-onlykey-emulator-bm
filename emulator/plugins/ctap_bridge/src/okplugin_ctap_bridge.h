@@ -15,9 +15,6 @@
  *   1 on, 2 off                                   (config mode)
  *   3 site: buffer[6] = length, buffer[7..] = rpId  (config mode)
  *   4 clear the site: no extra site, not the default (config mode)
- *   5 capabilities: "ctap_bridge capabilities:" then each, space-separated (while unlocked) -
- *     "wipes-delivered": a new request wipes a reply already delivered whole (OKCORE_WIPES_DELIVERED_REPLY)
- * Over the tunnel the first payload byte is the action: 5 the capabilities, anything else the report.
  */
 #ifndef OKPLUGIN_CTAP_BRIDGE_H
 #define OKPLUGIN_CTAP_BRIDGE_H
@@ -30,7 +27,7 @@ void okplugin_ctap_bridge_recv(uint8_t *buffer);
 int okplugin_ctap_bridge_allows(uint8_t cmd, uint8_t code);
 int okplugin_ctap_bridge_site(const uint8_t *appid);
 void okplugin_ctap_bridge_getpubkey(uint8_t *buffer);
-/* the report over the WebAuthn tunnel, sealed: the same text as over USB (read only); buffer[7] 5 = the capabilities */
-void okplugin_ctap_bridge_report_sealed(const uint8_t *buffer);
+/* the report over the WebAuthn tunnel, sealed: the same text as over USB (read only) */
+void okplugin_ctap_bridge_report_sealed(void);
 
 #endif

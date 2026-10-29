@@ -95,7 +95,7 @@ module.exports = {
         file: "libraries/onlykey/okcore.h",
         edits: [
           ["extern bool fadeendafter2sec(Task *me);\nextern void typeoutbackup(Task *me);\nextern void wipedata();\nextern void wipetasks();\nextern void fadeoffafter20();\nextern void cancelfadeoffafter20();\n",
-           "extern bool fadeendafter2sec(Task *me);\nextern void typeoutbackup(Task *me);\nextern void wipedata();\n/* A new request wipes a reply already delivered whole (wipedata_now), so a host need not wait out the Wipedata timer\n * before its next request. Defined for code that reports it. */\n#define OKCORE_WIPES_DELIVERED_REPLY 1\nextern void wipedata_now();\nextern void wipetasks();\nextern void fadeoffafter20();\nextern void cancelfadeoffafter20();\n"],
+           "extern bool fadeendafter2sec(Task *me);\nextern void typeoutbackup(Task *me);\nextern void wipedata();\nextern void wipedata_now();\nextern void wipetasks();\nextern void fadeoffafter20();\nextern void cancelfadeoffafter20();\n"],
         ],
       },
     ],

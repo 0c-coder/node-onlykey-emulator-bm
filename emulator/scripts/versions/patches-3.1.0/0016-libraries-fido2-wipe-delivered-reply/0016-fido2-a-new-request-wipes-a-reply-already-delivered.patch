@@ -1,4 +1,4 @@
-From b1b7360fc5640788331e9ed537745d8ee9a5cba2 Mon Sep 17 00:00:00 2001
+From 2e8fdfc97f6b6a7dac3960da30ce1c8520998c87 Mon Sep 17 00:00:00 2001
 From: bmatusiak <bmatusiak@gmail.com>
 Date: Wed, 28 Oct 2026 19:32:01 -0400
 Subject: [PATCH] fido2: a new request wipes a reply already delivered
@@ -18,8 +18,8 @@ waits 5 s before each one; a repeated packet is answered as before.
 ---
  fido2/ok_extension.cpp |  8 ++++++++
  onlykey/okcore.cpp     | 15 ++++++++++++++-
- onlykey/okcore.h       |  4 ++++
- 3 files changed, 26 insertions(+), 1 deletion(-)
+ onlykey/okcore.h       |  1 +
+ 3 files changed, 23 insertions(+), 1 deletion(-)
 
 diff --git a/fido2/ok_extension.cpp b/fido2/ok_extension.cpp
 index 5e3eac0..3a01767 100644
@@ -81,16 +81,13 @@ index 0620dbc..73a622d 100644
      Usertimeout.startDelayed();
  }
 diff --git a/onlykey/okcore.h b/onlykey/okcore.h
-index 54ad338..9420c9f 100644
+index 54ad338..746826e 100644
 --- a/onlykey/okcore.h
 +++ b/onlykey/okcore.h
-@@ -382,6 +382,10 @@ extern bool fadeoffafter20sec(Task *me);
+@@ -382,6 +382,7 @@ extern bool fadeoffafter20sec(Task *me);
  extern bool fadeendafter2sec(Task *me);
  extern void typeoutbackup(Task *me);
  extern void wipedata();
-+/* A new request wipes a reply already delivered whole (wipedata_now), so a host need not wait out the Wipedata timer
-+ * before its next request. Defined for code that reports it. */
-+#define OKCORE_WIPES_DELIVERED_REPLY 1
 +extern void wipedata_now();
  extern void wipetasks();
  extern void fadeoffafter20();
