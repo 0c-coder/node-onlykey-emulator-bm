@@ -54,11 +54,12 @@ module.exports = {
         + '                        large_buffer_offset = 0;\n'
         + '                        outputmode = WEBAUTHN;\n'
         + '                        okplugin_ctap_bridge_getpubkey(recv_buffer);\n'
-        /* its report over the tunnel - read only: a change of setting still needs config mode, over USB */
+        /* its report over the tunnel - read only: a change of setting still needs config mode, over USB; the request's
+           first byte 5 asks the key's capabilities instead (okplugin_ctap_bridge_report_sealed) */
         + '                    } else if (cmd == OKCTAPBRIDGE && okplugin_ctap_bridge_allows(cmd, opt1)) {\n'
         + '                        large_buffer_offset = 0;\n'
         + '                        outputmode = WEBAUTHN;\n'
-        + '                        okplugin_ctap_bridge_report_sealed();\n',
+        + '                        okplugin_ctap_bridge_report_sealed(recv_buffer);\n',
     },
     { file: 'libraries/fido2/device.cpp', anchor: '#include "onlykey.h"\n', insert: 'after', text: INC },
     {
