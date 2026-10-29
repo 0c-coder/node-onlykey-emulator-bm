@@ -4,7 +4,8 @@
  * OKDERIVESECRET (0xFC on the wire) over the WebAuthn tunnel, slot (opt1) 128. Payload:
  *   [0]      mode: DS_TOUCHLESS (answered while unlocked) or DS_TOUCH (the press or the challenge code)
  *   [1..32]  the label's SHA-256
- * Answer, sealed by the transit key: 32 bytes,
+ * exactly DS_PAYLOAD_LEN bytes in one final packet; any other length is refused ("Error derive_secret request")
+ * before the confirmation. Answer, sealed by the transit key: 32 bytes,
  *   HKDF-SHA256(salt = [0x20 | label hash], IKM = the slot-128 key,
  *               info = "onlykey/derive-secret/v1/" + ("touch/" | "touchless/") + the request's rpId hash)
  * The two modes and every rpId give unrelated secrets for one label. The confirmation runs before the derivation:

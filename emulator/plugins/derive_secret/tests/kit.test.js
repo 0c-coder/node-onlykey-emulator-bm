@@ -115,4 +115,39 @@ module.exports = function register({ it }, ctx) {
       await setDeriveMode(device, signal, assert, MODE_CHALLENGE);
     }
   });
+
+  /*
+   * THE INPUT IS ONE SHA-256 (Brad, 2026-10-28: "this should reject non 32 bytes"): the mode byte and exactly 32 bytes.
+   * A shorter request was zero-filled and a longer one cut to its first 32 bytes, each silently a secret of something
+   * the host never asked for. Hand-built here - deriveSecret only ever sends the right length - and refused before the
+   * key's confirmation, so a malformed request asks no press. At field 30's default (the code), an answer with no code
+   * entered can only be the refusal.
+   */
+  it('derive_secret: a request that is not the mode and exactly one SHA-256 is refused, before any press', async ({ device, assert, signal, log }) => {
+    await device.restart({ signal });
+    await device.unlock(ctx.PINS.primary, { signal });
+    const OKDERIVESECRET = 0xfc;
+    const SLOT = 128;
+    const DS_TOUCHLESS = 1;
+    const app = await browser(device, signal);
+    try {
+      for (const hashBytes of [0, 31, 33, 56]) {
+        const req = Uint8Array.from([DS_TOUCHLESS, ...Buffer.alloc(hashBytes, 0xab)]);
+        let said;
+        try {
+          const r = await app.services.okcrypto.tunnelRequest(OKDERIVESECRET, SLOT, req, { timeoutMs: 15000 });
+          said = r.text !== undefined ? r.text : `${r.data.length} bytes`;
+        } catch (e) {
+          said = String(e && e.message);
+        }
+        log(`mode + ${hashBytes} bytes (${req.length}): ${said.slice(0, 60)}`);
+        assert.match(said, /Error derive_secret request/, `a request of the mode + ${hashBytes} bytes was not refused`);
+      }
+    } finally {
+      await app.destroy();
+    }
+    /* and the right length still derives: the mode and one SHA-256, its code entered */
+    const ok = await derive(device, signal, 'okedge/test/a', { confirm: presser(device, log) });
+    assert.equal(ok.length, 64, 'a well-formed request after the refusals: no 32-byte secret');
+  });
 };
