@@ -50,17 +50,28 @@ for r in OnlyKey-Firmware libraries; do
 done
 git -C "$OUT/OnlyKey-Firmware" checkout -q --detach "$FW_PIN"
 git -C "$OUT/libraries" checkout -q -B edge/3.1.0 "$LIB_PIN"
+# THE PATCHES ARE THE RELEASE'S (as the soft key's stager, scripts/versions/v3.1.0.js): with the version_control plugin,
+# exactly the ones its version.json lists, in number order; without it, none - the maintainer's 3.1.0 as published.
+# A listed patch that is held or missing stops the build: the list is the release's whole definition.
+LISTED=""
+case ",$PLUGINS," in
+  *,version_control,*) LISTED=$(node -p "require('$PLUGINS_DIR/version_control/plugin.js').patches.join(' ')") || exit 1 ;;
+esac
+for n in $LISTED; do
+  d=$(ls -d "$PATCHES/$n-"* 2>/dev/null | head -1)
+  [ -n "$d" ] || { echo "   version_control lists $n - no such patch folder in $PATCHES - not building"; exit 1; }
+  [ -f "$d/HOLD" ] && { echo "   version_control lists $n, which is held ($d/HOLD) - not building"; exit 1; }
+done
 fixes=""
 for p in "$PATCHES"/*/*.patch; do
   [ -f "$p" ] || continue
-  [ -f "$(dirname "$p")/HOLD" ] && { say "   held, not applied: $(basename "$(dirname "$p")")"; continue; }
-  # an EXPERIMENTAL patch only for a build that asks (OKEMU_EXPERIMENTAL=1) - never the release hex (gen-fixes.js)
-  [ -f "$(dirname "$p")/EXPERIMENTAL" ] && [ "$OKEMU_EXPERIMENTAL" != 1 ] && { say "   experimental, not applied: $(basename "$(dirname "$p")")"; continue; }
+  n=$(basename "$(dirname "$p")" | cut -c1-4)
+  case " $LISTED " in *" $n "*) ;; *) continue ;; esac
   git -C "$OUT/libraries" -c user.name=build-hardkey -c user.email=build@localhost am -q "$p" \
     || { git -C "$OUT/libraries" am --abort; echo "   $(basename "$p") does not apply to $LIB_PIN - not building"; exit 1; }
-  fixes="$fixes $(basename "$(dirname "$p")" | cut -c1-4)"
+  fixes="$fixes $n"
 done
-say "   RC fixes applied:${fixes:- none}"
+say "   patches applied (version_control):${fixes:- none, the release as published}"
 # the hex names the public pin and the fixes on it (a `git am` commit's own hash is nobody else's, and moves with the clock)
 FIXTAG="$(echo $fixes | sed 's/ /-/g')"; FIXTAG="${FIXTAG:+-fix$FIXTAG}"
 

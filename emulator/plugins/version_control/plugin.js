@@ -1,42 +1,48 @@
 'use strict';
 /*
- * version_control - the version our firmware builds report, one ahead of the maintainer's (Brad, 2026-10-28: "i just
- * don't want to use 3.1.0 in our builds, i would like to use 3.1.1 or be able to bump my development version of the
- * pins i work on, so the version is 1 ahead of the maintainer so we don't collide, and to go back to his version
- * number we don't use the plugin and it goes back to his version easy, just by not including the plugin").
+ * version_control - OUR RELEASE, ON THE MAINTAINER'S BASE (Brad, 2026-10-28: "i would like to ... bump my development
+ * version of the pins i work on, so the version is 1 ahead of the maintainer so we don't collide, and to go back to
+ * his version number we don't use the plugin"; "then we enable patches based off that version set in the
+ * version_control"; "set our version to his + 0 or 1 or 2, so it would be 3.1.01 or 3.1.02, so his base is followed").
  *
- * The version lives in one file beside this one, VERSION ("3.1.1"): bump it there. The hook redefines the base's
- * three version parts (onlykey.h OKversionmaj / OKversionmin / OKversionpat) right before the line that joins them
- * into OKversion, so everything built from them - the status a host reads ("UNLOCKEDv3.1.1-prodc"), the version shown
- * on the key - says ours. The release keyword (-prod / -test) and the model letter are the base's, untouched.
- * Leave the plugin out and the build reports the maintainer's version, as staged.
- *
- * Hosts compare versions as "at least" (node-onlykey-lib src/device/version.js atLeast): a 3.1.1 has every 3.1.0
- * capability. The firmware's downgrade guard keeps only the major (OnlyKey.ino: EEPROM 1984), so a patch or minor
- * bump never locks a key out of the maintainer's firmware.
+ * version.json beside this file is the whole definition of the release:
+ *   {"base": "3.1.0", "build": 1, "patches": ["0012", "0013", "0015", "0016"]}
+ * - the firmware reports the base's version with our build appended to its patch number: 3.1.0 + build 1 = v3.1.01
+ *   (the maintainer has never used two-digit numbers; node-onlykey-lib src/device/version.js reads a two-digit patch
+ *   as his patch digit, then our build), the release keyword (-prod / -test) and the model letter the base's;
+ * - the build applies exactly the listed patches (scripts/versions/patches-<base>/, chosen by the stager and by
+ *   plugins/edge/tools/build-hardkey.sh) - an experimental one only when listed, a held one never.
+ * Left out of a build: the maintainer's release as he published it - his version, no patches.
+ * A new release of ours: raise "build" and change the list together, so one version always names one set.
  */
 const fs = require('fs');
 const path = require('path');
 
-const text = fs.readFileSync(path.join(__dirname, 'VERSION'), 'utf8').trim();
-const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(text);
-if (!m) throw new Error(`version_control: VERSION must be major.minor.patch, not ${JSON.stringify(text)}`);
-const [, major, minor, patch] = m;
+const def = JSON.parse(fs.readFileSync(path.join(__dirname, 'version.json'), 'utf8'));
+const base = /^(\d+)\.(\d+)\.(\d)$/.exec(String(def.base));
+if (!base) throw new Error(`version_control: base must be major.minor.patch with a one-digit patch, not ${JSON.stringify(def.base)}`);
+if (!Number.isInteger(def.build) || def.build < 1 || def.build > 9) throw new Error(`version_control: build must be 1..9, not ${JSON.stringify(def.build)}`);
+if (!Array.isArray(def.patches) || def.patches.some((p) => !/^\d{4}$/.test(p))) throw new Error('version_control: patches must be a list of four-digit patch numbers');
+const [, major, minor, patch] = base;
+const version = `${major}.${minor}.${patch}${def.build}`;
 
 module.exports = {
   name: 'version_control',
   minBase: '3.1.0',
-  notes: `the firmware reports v${text} (VERSION) instead of the base's version; left out, the base's`,
+  notes: `the firmware reports v${version} - base ${def.base}, our build ${def.build}, patches ${def.patches.join(' ') || 'none'} (version.json); left out, the maintainer's release`,
   stateless: true,
-  version: text,
+  version,
+  base: def.base,
+  build: def.build,
+  patches: def.patches.slice(),
   hooks: [
     {
       file: 'onlykey.h',
       anchor: '#define OKversion "v" OKversionmaj "." OKversionmin "." OKversionpat OKversionkeyword\n',
       insert: 'before',
-      text: '/* plugin version_control: this build\'s version (its VERSION file) */\n'
+      text: `/* plugin version_control: v${version}, the base ${def.base} and our build ${def.build} (its version.json) */\n`
         + '#undef OKversionmaj\n#undef OKversionmin\n#undef OKversionpat\n'
-        + `#define OKversionmaj "${major}"\n#define OKversionmin "${minor}"\n#define OKversionpat "${patch}"\n`,
+        + `#define OKversionmaj "${major}"\n#define OKversionmin "${minor}"\n#define OKversionpat "${patch}${def.build}"\n`,
     },
   ],
 };

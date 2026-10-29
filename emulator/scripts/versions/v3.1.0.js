@@ -41,22 +41,32 @@ const workingTree = require('./working-tree');
 const rcFixes = require('./fixes-3.1.0');
 
 /*
- * The fixes found testing the RC that upstream does not carry yet (fixes-3.1.0.js) are ON by default: the soft key then
- * runs what the developer hard key runs. OKEMU_RC_FIXES=0 stages the RC exactly as published.
+ * THE PATCHES ARE THE RELEASE'S: OURS IS NAMED BY THE version_control PLUGIN (Brad, 2026-10-28: "enable patches based
+ * off that version set in the version_control"; "to go back to his version number we don't use the plugin"). A build
+ * whose plugins include version_control applies exactly the patches its version.json lists (fixes-3.1.0.js byName) and
+ * reports that version (3.1.01, ...); a build without it is the maintainer's 3.1.0 as published - no patches. A listed
+ * patch that is not here (held, or a typo) stops the build: the list is the release's whole definition.
+ * build.json records them as `fixes`, so a build says what it carries.
  */
-const withFixes = process.env.OKEMU_RC_FIXES !== '0';
-/*
- * The experimental ones (fixes-3.1.0.js `experimental`, an EXPERIMENTAL file in the patch folder) only for a build that
- * asks, OKEMU_EXPERIMENTAL=1 - the testnet soft key we develop on - on top of the fixes. build.json lists them in
- * `fixes` like the others, so a build says what it carries.
- */
-const withExperimental = withFixes && process.env.OKEMU_EXPERIMENTAL === '1';
-const experimental = withExperimental && rcFixes.experimental ? rcFixes.experimental : { names: [], patches: [] };
+function versionControl() {
+  const plugins = require('node-onlykey-lib/cli/firmware-plugins').selected();
+  if (!plugins.includes('version_control')) return null;
+  const dir = process.env.OKEMU_PLUGINS_DIR ? require('path').resolve(process.env.OKEMU_PLUGINS_DIR) : require('path').join(__dirname, '..', '..', 'plugins');
+  return require(require('path').join(dir, 'version_control', 'plugin.js'));
+}
+const ours = versionControl();
+if (ours && ours.base !== '3.1.0') throw new Error(`version_control names base ${ours.base}; this stages 3.1.0`);
+const chosen = ours ? ours.patches : [];
+for (const n of chosen) {
+  if (!rcFixes.byName[n]) {
+    throw new Error(`version_control lists patch ${n}, which patches-3.1.0/ does not stage${rcFixes.held.includes(n) ? ' (it is held)' : ''}`);
+  }
+}
 
 module.exports = {
   ...workingTree,
-  patches: withFixes ? [...rcFixes.patches, ...experimental.patches] : [],
-  fixes: withFixes ? [...rcFixes.names, ...experimental.names] : [],
+  patches: chosen.flatMap((n) => rcFixes.byName[n]),
+  fixes: chosen,
   version: 'v3.1.0',
   pins: { libraries: 'fe9e293', 'OnlyKey-Firmware': '80e3ba0' },
   status: 'untried',

@@ -72,10 +72,9 @@ function parsePatch(text, repoDir) {
 const all = fs.readdirSync(dir).filter((d) => /^\d{4}-/.test(d)).sort();
 const held = all.filter((d) => fs.existsSync(path.join(dir, d, 'HOLD')));
 /*
- * EXPERIMENTAL: a folder holding an EXPERIMENTAL file (its reason inside) is generated like a fix but kept apart, as
- * `experimental` - staged only for a build that asks (OKEMU_EXPERIMENTAL=1), never in the RC fixes every build gets,
- * so a release hex never carries it (Brad, 2026-10-28: 0016 "as an experimental speed improvement").
- * build-hardkey.sh skips it the same way.
+ * EXPERIMENTAL: a folder holding an EXPERIMENTAL file (its reason inside) - not sent upstream (Brad, 2026-10-28: 0016
+ * "as an experimental speed improvement"). Like every patch here, a build carries it only when its version_control
+ * version.json lists it; it is named apart so a person sees which of a release's patches are ours alone.
  */
 const experimentalDirs = all.filter((d) => !held.includes(d) && fs.existsSync(path.join(dir, d, 'EXPERIMENTAL')));
 const fixOf = (d) => {
@@ -102,9 +101,20 @@ const patchLines = (list, indent) => {
   }
   return out;
 };
-const body = ['module.exports = {', `  names: [${fixes.map((f) => q(f.name)).join(', ')}],`, '  patches: [', ...patchLines(fixes, '    '), '  ],'];
-body.push('  experimental: {', `    names: [${experimental.map((f) => q(f.name)).join(', ')}],`, '    patches: [', ...patchLines(experimental, '      '), '    ],', '  },');
-body.push('};', '');
+/*
+ * BY NUMBER (Brad, 2026-10-28: "enable patches based off that version set in the version_control"): a build applies
+ * exactly the patches its version_control plugin's version.json lists, picked from here by number - a fix or an
+ * experimental one alike; a held one is not here, so no version can carry it by mistake. names / experimental / held
+ * say which is which, for a person reading this file.
+ */
+const body = ['module.exports = {', `  names: [${fixes.map((f) => q(f.name)).join(', ')}],`];
+body.push(`  experimental: [${experimental.map((f) => q(f.name)).join(', ')}],`);
+body.push(`  held: [${held.map((d) => q(d.slice(0, 4))).join(', ')}],`);
+body.push('  byName: {');
+for (const f of [...fixes, ...experimental].sort((a, b) => a.name.localeCompare(b.name))) {
+  body.push(`    ${q(f.name)}: [`, ...patchLines([f], '      '), '    ],');
+}
+body.push('  },', '};', '');
 
 const old = fs.readFileSync(out, 'utf8').replace(/\r\n/g, '\n');
 const at = old.indexOf('module.exports = {');
@@ -119,7 +129,7 @@ if (mode === '--check') {
   const checkout = path.resolve(rest[1] || '');
   const pins = require(path.join(here, `v${version}.js`)).pins;
   const files = new Map();
-  /* the experimental ones on top of the fixes, as an OKEMU_EXPERIMENTAL build stages them */
+  /* every patch a version may list, the experimental ones included */
   for (const f of [...fixes, ...experimental]) for (const p of f.patches) for (const file of p.files) {
     const [repoDir, ...inRepo] = file.file.split('/');
     const pin = pins[repoDir];
@@ -138,4 +148,4 @@ if (mode === '--check') {
   console.log(`fixes-${version}.js written from patches-${version}/ (${fixes.map((f) => f.name).join(', ') || 'none'})`);
 }
 if (held.length) console.log(`held, not staged: ${held.join(', ')}`);
-if (experimental.length) console.log(`experimental, staged only with OKEMU_EXPERIMENTAL=1: ${experimental.map((f) => f.name).join(', ')}`);
+if (experimental.length) console.log(`experimental (ours, not sent), staged when a version_control version lists them: ${experimental.map((f) => f.name).join(', ')}`);

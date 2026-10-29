@@ -1,3 +1,3 @@
-Experimental, not sent: a speed improvement for hosts that make several WebAuthn requests in a row (Edge, the MCP plan runner).
-Staged only for a build with OKEMU_EXPERIMENTAL=1 (the testnet soft key); release builds and the prod hex leave it out.
-It waits for a measurement on the box and for Brad.
+Experimental, not sent upstream: a speed improvement for hosts that make several WebAuthn requests in a row (Edge, the MCP plan runner).
+A build carries it only when the version_control plugin's version.json lists it.
+It waits for testing and for Brad.
